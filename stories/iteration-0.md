@@ -4,52 +4,53 @@ This isn't a story in the sense `docs/story-process.md` describes - there's no u
 
 ## Repo skeleton
 
-- [ ] `go.mod` - module path, Go version
-- [ ] Directory layout matching `docs/architecture.md`: a domain package, ports (in/out), adapters (Postgres, fakes), a `specifications/` package (`docs/adr/0022-specifications-and-drivers.md`), and `cmd/` for the single image that runs as either the API role or the relay role (`docs/brief.md`, `docs/source-control.md`)
-- [ ] A literal hello-world slice - one trivial in-port, one HTTP handler, one fake-backed out-port, exercised by one real specification - to prove the skeleton, the TDD loop, and the fakes pattern all actually work end to end before any real story leans on them
+- [x] `go.mod` - module path `github.com/quii/ce`, Go 1.25
+- [x] Directory layout matching `docs/architecture.md`: `internal/domain`, `internal/ports/{in,out}`, `internal/adapters/{memory,httpapi}`, `specifications/` (`docs/adr/0022-specifications-and-drivers.md`), and `cmd/ce` for the single image that runs as either the API role or the relay role (`docs/brief.md`, `docs/source-control.md`)
+- [x] A literal hello-world slice - `GetGreetingUseCase` in-port, `GreetingHandler` HTTP handler, `memory.GreetingFinder` out-port implementation, exercised by one real specification through both drivers - proves the skeleton, the TDD loop, and the fakes pattern all actually work end to end
 
 ## Build tooling
 
-- [ ] `mage` set up (tracked via `go.mod`'s `tool` directive, not `require`) as the build runner - Go functions in `magefile.go`, not a shell/YAML DSL
-- [ ] `mage test` - `go test -race -count=3 -shuffle=on ./...`
-- [ ] `mage lint` - `golangci-lint run ./...`
-- [ ] `mage mutate` - `go-mutesting`, git-diff scoped
-- [ ] Decide whether `docs/adr/0005-no-new-dependencies.md`'s allowlist check should also cover `go.mod`'s `tool` directive, or whether dev tooling is intentionally freer than runtime dependencies
+- [x] `mage` set up (tracked via `go.mod`'s `tool` directive, not `require`) as the build runner - Go functions in `magefile.go`, not a shell/YAML DSL
+- [x] `mage test` - `go test -race -count=3 -shuffle=on ./...`
+- [x] `mage lint` - `golangci-lint run ./...`
+- [x] `mage mutate` - `go-mutesting --git-diff-lines --git-diff-base=HEAD --fail-on-escaped --logger-agentic-json`
+- [ ] Decide whether `docs/adr/0005-no-new-dependencies.md`'s allowlist check should also cover `go.mod`'s `tool` directive, or whether dev tooling is intentionally freer than runtime dependencies (still open)
 
 ## Linting - `.golangci.yml`
 
-- [ ] `testpackage` enabled
-- [ ] `depguard`, file-scoped to the domain package, denying `net`, `net/http`, `log`, `log/slog`, `database/sql`, `os`, and any import from this module other than the domain package itself
-- [ ] `forbidigo`, denying `^time\.Now$` and anything from `math/rand`/`crypto/rand` outside the injected `Clock`/ID-generator adapters
-- [ ] `forbidigo`, second rule, denying `time\.Sleep` inside `_test.go` files
-- [ ] `revive`'s `argument-limit`, set to 2, scoped to the in-port/use-case package
-- [ ] `revive`'s `file-length-limit`, set to 250, with an `exclude-rules` entry exempting `_test.go` files from that rule specifically (path *and* message matched, not a blanket revive exemption)
+- [x] `testpackage` enabled
+- [x] `depguard`, file-scoped to the domain package, denying `net`, `net/http`, `log`, `log/slog`, `database/sql`, `os`, and any import from this module other than the domain package itself - verified empirically (adding a `log` import to the domain package fails lint with the expected message, reverting it passes)
+- [x] `forbidigo`, denying `^time\.Now$` and anything from `math/rand`/`crypto/rand` outside the injected `Clock`/ID-generator adapters
+- [x] `forbidigo`, second rule denying `time\.Sleep` - **scope changed from "test files only" to everywhere**: golangci-lint v2's forbidigo schema doesn't support a per-rule `path`, so the rule is global. Production code shouldn't be reaching for raw `time.Sleep` over the Clock/ticker pattern anyway, so this is arguably a stricter, still-correct outcome - flagging the deviation from the original plan rather than silently accepting it
+- [x] `revive`'s `argument-limit`, set to 2, scoped to `internal/ports/in`/`internal/ports/out` via an exclude-list of every other top-level package (RE2, which golangci-lint uses, has no negative lookahead, so "everywhere except X" has to be spelled out rather than expressed directly) - verified empirically (a 3-arg function in `ports/in` fails lint, the same function elsewhere wouldn't be scoped)
+- [x] `revive`'s `file-length-limit`, set to 250, with an `exclude-rules` entry exempting `_test.go` files from that rule specifically (path *and* message matched, not a blanket revive exemption)
 
 ## Architecture test
 
-- [ ] A Go test that loads the module's package graph and fails if the domain package imports anything from this module other than itself, including an explicit check for `log`/`log/slog` (stdlib, so the general import check alone wouldn't catch it)
+- [x] A Go test (`internal/archtest`) that inspects the domain package's imports via the standard library's `go/build` (no third-party dependency needed) and fails if it imports anything from this module other than itself, including an explicit check for `log`/`log/slog`
 
 ## Dependency allowlist
 
-- [ ] A test that fails if `go.mod` contains any `require` beyond an explicit allowlist (starts empty)
+- [x] A test (`internal/depcheck`) that parses `go.mod` directly (no third-party mod-parsing library) and fails if it contains any *direct* `require` beyond an explicit allowlist - verified empirically (an unapproved `require` line fails the test, reverting it passes). Deliberately only checks direct requires, not the full transitive closure `go list -m all` would show - testcontainers-go alone pulls in dozens of indirect dependencies, and policing those isn't what this ADR is for
 
 ## Mutation testing
 
-- [ ] `go-mutesting` installed, git-diff mode configured so it scopes to the pending diff rather than the whole repo
-- [ ] `--logger-agentic-json` output wired up
+- [x] `go-mutesting` installed, `--git-diff-lines --git-diff-base=HEAD` scopes it to the pending diff rather than the whole repo
+- [x] `--logger-agentic-json` output wired up
+- **Known limitation, discovered empirically**: `--git-diff-lines` doesn't find mutations in files that are entirely new and untracked by git - it needs the file to at least be `git add`-ed (staged) to see a diff against `HEAD`, and even then a brand-new file's mutation targeting seems unreliable (one file in a new package failed to compile in isolation during a mutation run). Verified working correctly for genuine *modifications* to already-committed files, which is what real future commits will mostly look like - this bulk scaffolding commit is the unusual case, not the common one
 
 ## Docker
 
-- [ ] `Dockerfile` - single image, both roles
-- [ ] `docker-compose.yml` - Postgres, plus the image started twice (API role, relay role) per `docs/brief.md`'s developer-experience section
-- [ ] `docker compose up` actually brings up a working stack, hello-world slice included
+- [x] `Dockerfile` - single image, both roles, multi-stage build into `gcr.io/distroless/static-debian12`
+- [x] `docker-compose.yml` - Postgres, plus the image started twice (API role, relay role)
+- [x] `docker compose up` actually brings up a working stack - verified with a real `curl` against the running API container. Caught a real bug in the process: the relay role's original `select {}` placeholder is an actual Go runtime deadlock (no goroutines, no channels - nothing could ever wake it), which crashed the container immediately. Fixed with a proper `os/signal` wait, which is also just the idiomatically correct way to keep a service alive and shut down gracefully
 
 ## Specifications and drivers
 
-- [ ] `Driver` interface defined for the hello-world specification
-- [ ] In-process driver implementation, calling the in-port directly
-- [ ] Container driver implementation, using testcontainers-go to build and run the real CE image (the same tool already managing Postgres for the contract tests, not separate shell orchestration) and talk to it over HTTP
-- [ ] The hello-world specification passes through both drivers as part of `mage test` - no separate, slower cadence for now; project's small enough that the cost isn't prohibitive yet (revisit if that changes)
+- [x] `Driver` interface defined for the hello-world specification
+- [x] In-process driver implementation, calling the in-port directly
+- [x] Container driver implementation, using testcontainers-go to build and run the real CE image (the same tool already managing Postgres for the contract tests, not separate shell orchestration) and talk to it over HTTP - verified: it actually builds the image, starts the container, waits for real HTTP readiness, and runs the same specification against it
+- [x] The hello-world specification passes through both drivers as part of `mage test` - no separate, slower cadence for now; project's small enough that the cost isn't prohibitive yet (revisit if that changes)
 
 ## ADRs and the pre-commit ADR check
 

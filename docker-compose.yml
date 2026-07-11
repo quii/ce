@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ce
+      POSTGRES_PASSWORD: ce
+      POSTGRES_DB: ce
+    ports:
+      - "5432:5432"
+
+  api:
+    build: .
+    environment:
+      CE_ROLE: api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  relay:
+    build: .
+    environment:
+      CE_ROLE: relay
+    depends_on:
+      - postgres

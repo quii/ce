@@ -29,4 +29,4 @@ Root causes get fixed at the source. Retrying, increasing a timeout, adding a sl
 
 ## Enforcement
 
-Mechanical, via `-race`/`-count`/`-shuffle` plus the `forbidigo` rule denying `time.Sleep` in `_test.go` files (`docs/adr/0001-domain-purity.md`'s sibling lint config) - not a subagent judgment call, a gate that either catches the flakiness or doesn't.
+Mechanical, via `-race`/`-count`/`-shuffle` plus a `forbidigo` rule denying `time.Sleep` outright (`.golangci.yml`) - not a subagent judgment call, a gate that either catches the flakiness or doesn't. The rule ended up global rather than scoped to `_test.go` files as originally planned: golangci-lint v2's `forbidigo` schema doesn't support a per-rule path, and production code reaching for raw `time.Sleep` instead of the injected `Clock`/a ticker isn't something worth allowing anyway - a stricter outcome than intended, kept deliberately rather than worked around.

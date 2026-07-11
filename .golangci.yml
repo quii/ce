@@ -1,0 +1,66 @@
+version: "2"
+
+linters:
+  enable:
+    - testpackage
+    - depguard
+    - forbidigo
+    - revive
+
+  settings:
+    depguard:
+      rules:
+        domain:
+          files:
+            - "**/internal/domain/**"
+          deny:
+            - pkg: "net"
+              desc: "domain package must not perform network I/O - see docs/adr/0001-domain-purity.md"
+            - pkg: "net/http"
+              desc: "domain package must not know about HTTP - see docs/adr/0001-domain-purity.md"
+            - pkg: "log"
+              desc: "domain package must never log - see docs/adr/0001-domain-purity.md"
+            - pkg: "log/slog"
+              desc: "domain package must never log - see docs/adr/0001-domain-purity.md"
+            - pkg: "database/sql"
+              desc: "domain package must not talk to a database directly - see docs/adr/0001-domain-purity.md"
+            - pkg: "os"
+              desc: "domain package must not touch the OS - see docs/adr/0001-domain-purity.md"
+            - pkg: "github.com/quii/ce/internal/ports"
+              desc: "domain package must not import ports - see docs/adr/0001-domain-purity.md"
+            - pkg: "github.com/quii/ce/internal/adapters"
+              desc: "domain package must not import adapters - see docs/adr/0001-domain-purity.md"
+
+    forbidigo:
+      forbid:
+        - pattern: "^time\\.Now$"
+          msg: "inject a Clock instead - see docs/adr/0015-utc-always.md"
+        - pattern: "^rand\\."
+          msg: "inject an ID generator instead - see docs/adr/0001-domain-purity.md"
+        - pattern: "^time\\.Sleep$"
+          msg: "no sleep-based synchronisation, in tests or otherwise - see docs/adr/0021-no-flaky-tests.md"
+
+    revive:
+      rules:
+        - name: argument-limit
+          arguments: [2]
+          exclude:
+            - "cmd/**"
+            - "internal/domain/**"
+            - "internal/adapters/**"
+            - "internal/archtest/**"
+            - "internal/depcheck/**"
+            - "specifications/**"
+          # applies to internal/ports/in and internal/ports/out only - see docs/adr/0003-commands-not-parameter-lists.md
+        - name: file-length-limit
+          arguments:
+            - max: 250
+              skip-comments: false
+              skip-blank-lines: false
+
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - revive
+        text: "file-length-limit"
