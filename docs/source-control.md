@@ -13,8 +13,13 @@ A commit is the size of one coherent step, not a whole feature - closer to a sin
 A commit passes the same gates as everything else in this project - there's no separate, looser bar for "just a small commit":
 
 - `go test -race -count=3 -shuffle=on ./...` is green (see `docs/development-practice.md` - this already gives full confidence on its own, nothing extra needed for CI)
-- `golangci-lint run ./...` is clean
-- file-length limits are respected
-- mutation testing on the diff shows no unexplained survivors (see `docs/standards.md`)
+- `golangci-lint run ./...` is clean (this also covers file length - see `docs/adr/0004-file-length.md`)
+- mutation testing on the diff shows no unexplained survivors (see `docs/adr/0020-mutation-testing.md`)
 
 This isn't a separate ceremony bolted onto committing - it's the same checks already being run constantly while working outside-in. Committing just means running them one more time, right before, on a diff small enough that doing so is cheap every single time.
+
+## The ADR check
+
+On top of the mechanical gates above, an automatic pre-commit hook checks the diff against the ADRs in `docs/adr/`. It skips two categories: ADRs whose `enforcement` is `mechanical` (already caught by the gates above, so re-checking them would be pure waste) and ADRs whose `scope` doesn't overlap the changed files. What's left - `judgment`-tier ADRs relevant to the diff - each get one subagent checking the diff against that ADR specifically.
+
+A flagged violation blocks the commit. If the fix is obvious, it gets fixed and the commit retried without involving anyone. If the fix isn't obvious, that's a stop, not a guess - it's worth a conversation before proceeding, not a judgment call for the agent to make alone.
