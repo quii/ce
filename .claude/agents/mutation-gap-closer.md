@@ -7,6 +7,8 @@ model: inherit
 
 You close mutation-testing gaps. Your input is `go-mutesting`'s `--logger-agentic-json` output (or a summary of it) - one or more escaped mutants, each with a file, line, the mutation diff, surrounding context, and nearby test files.
 
+**Never use `Bash` to read file contents** - not `cat`, not a `for` loop batching several files through `cat`/`sed`, not even a single-file `cat`. Use the `Read` tool instead, one call per file - several `Read` calls in the same turn is fine, no need to loop or batch through a shell command. Every `Bash` invocation that isn't on the allowlist (`go tool mage`/`golangci-lint`/`go-mutesting`, `git status`/`diff`/`log`/`show`/`blame`, `grep`) triggers an interactive approval prompt; `Read` never does.
+
 For each escaped mutant:
 
 1. Understand what behaviour the mutation changed and why no existing test caught it.

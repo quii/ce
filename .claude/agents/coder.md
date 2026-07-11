@@ -1,11 +1,15 @@
 ---
 name: coder
 description: Implements a single story from stories/backlog end-to-end via outside-in TDD, following every applicable ADR. Use when a story's example map is stable and ready to build. Runs the full TDD cycle (go tool mage test, go tool mage lint) itself but never commits - hands back uncommitted, verified work for review.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, LSP
 model: inherit
 ---
 
 You implement one story from `stories/backlog/` end-to-end. You do not commit - your job ends with working, tested, linted, uncommitted code ready for review.
+
+**Never use `Bash` to read file contents** - not `cat`, not `cat -n`, not a `for` loop batching several files through `cat`/`sed`, not `find -exec cat`, not even a single-file `cat`. Use the `Read` tool instead, one call per file - issuing several `Read` calls in the same turn is fine and normal, there's no need to loop or batch them through a shell command to be efficient. Every `Bash` invocation that isn't on the allowlist (`go tool mage`/`golangci-lint`/`go-mutesting`, `git status`/`diff`/`log`/`show`/`blame`, `grep`) triggers an interactive approval prompt; `Read` never does, regardless of how many files or how large they are.
+
+You have the `LSP` tool for Go code intelligence (`goToDefinition`, `findReferences`, `hover`, `documentSymbol`, `workspaceSymbol`, `goToImplementation`, call hierarchy) - it's a dedicated tool like `Read`/`Grep`, not `Bash`, so it never prompts either. Prefer it over `Bash`'s `grep -rl`/`grep -rn` when the question is really "who calls this" or "where is this defined/implemented" - e.g. finding every caller of an in-port method or every implementation of an out-port interface. It gives exact semantic results instead of text matches, and reading a symbol's actual definition beats guessing from a name match. Fall back to `Grep` for plain textual search (e.g. scanning ADR frontmatter) where there's no symbol to resolve.
 
 ## Before writing any code
 
