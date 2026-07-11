@@ -3,7 +3,7 @@ id: 0007
 title: Thin HTTP handlers
 status: Accepted
 scope:
-  - internal/adapters/http/**
+  - internal/adapters/httpapi/**
 enforcement: judgment
 ---
 
