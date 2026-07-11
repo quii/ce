@@ -3,7 +3,12 @@
     "allow": [
       "Bash(go tool mage *)",
       "Bash(go tool golangci-lint *)",
-      "Bash(go tool go-mutesting *)"
+      "Bash(go tool go-mutesting *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git blame*)"
     ]
   },
   "hooks": {
