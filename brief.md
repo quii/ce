@@ -10,7 +10,7 @@ A conversation is a collection of data of various participants discussing a "res
 
 A conversation should be seen as a tree of threads. Each conversation will have at least one starting thread. A thread can have a title, and a thread can have a set of participants, which can change over time.
 
-A participant, is just an identifier, like an UUID, provided by the calling system. CE does not validate these identifiers, but it can be used in a query - like "get all conversations by participant"
+A participant, is just an identifier, like a UUID, provided by the calling system. CE does not validate these identifiers, but it can be used in a query - like "get all conversations by participant"
 
 A thread has a list of messages. Messages have text in them, and can have newlines, but no other formatting. Messages can also have attachments. A new child thread can be spawned at any point with a list of messages, as users discover tangents to go down. 
 
@@ -59,7 +59,7 @@ To help with demo-ing, we will use content negotiation. CE will have a simple HT
 
 ## Technical approach
 
-Writes are event sourced rather than row-mutated - every state change is captured as an event, which is what full audit retrieval requires, and gives us a clean answer for messages being editable/deletable (an edit or delete is a new event, not an UPDATE/DELETE). Those events reach read-optimised projections via a transactional outbox, so the event store and projections stay consistent without a dual-write problem. See `tech.md` for the architecture (ports, CQRS), the full write path, and the consistency mechanics behind it.
+Writes are event sourced rather than row-mutated - every state change is captured as an event, which is what full audit retrieval requires, and gives us a clean answer for messages being editable/deletable (an edit or delete is a new event, not an UPDATE/DELETE). Those events reach read-optimised projections via a transactional outbox, so the event store and projections stay consistent without a dual-write problem. See `docs/` for more on the architecture and technical detail behind this.
 
 ## Tech stack
 

@@ -1,17 +1,6 @@
-# CE technical deep dive
-
-This expands on the technical approach summarised in `brief.md` - the architecture shape, the write path, and the consistency mechanics behind it.
-
-# Architecture
-
-We're loosely following a DDD / hexagonal shape:
-
-- **In ports** - use cases, the application's public surface (e.g. "start conversation", "post message", "edit message"). HTTP handlers call into these, nothing else.
-- **Out ports** - interfaces for anything CE depends on externally, e.g. the event store, projections/read db. Keeps the domain honest and lets us swap infra without touching use cases.
-
-On top of that we're using CQRS - writes and reads take entirely separate paths. This isn't CQRS for its own sake, it falls out of the auditability requirement: writes append events, reads are served from read-optimised projections built from those events.
-
 # Event sourcing & the write path
+
+See `docs/architecture.md` for the ports/CQRS shape this sits inside. This doc is just the write path itself: how a write becomes an event, how that event reaches a projection, and how a caller knows when it's safe to read their own write.
 
 Every state change is captured as an event, not a row mutation - this is what makes full audit retrieval possible. It also gives us a clean answer to messages being editable/deletable: an edit is a `MessageEdited` event, a delete is a `MessageDeleted` event, not an UPDATE/DELETE. The log itself is never mutated.
 
