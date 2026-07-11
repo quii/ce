@@ -14,7 +14,7 @@ This isn't a story in the sense `docs/story-process.md` describes - there's no u
 - [x] `mage test` - `go test -race -count=3 -shuffle=on ./...`
 - [x] `mage lint` - `golangci-lint run ./...`
 - [x] `mage mutate` - `go-mutesting --git-diff-lines --git-diff-base=HEAD --fail-on-escaped --logger-agentic-json`
-- [ ] Decide whether `docs/adr/0005-no-new-dependencies.md`'s allowlist check should also cover `go.mod`'s `tool` directive, or whether dev tooling is intentionally freer than runtime dependencies (still open)
+- [x] Decided: `docs/adr/0005-no-new-dependencies.md`'s allowlist check stays scoped to the `require` block - dev tooling (`tool` directive) is intentionally freer than runtime dependencies, since it never ships in the production image and any addition is already a reviewable `go.mod` diff. The `depcheck` test already behaved this way by construction (it only parses `require (...)` blocks); the ADR and test comment now say so explicitly rather than leaving it implicit
 
 ## Linting - `.golangci.yml`
 
@@ -57,8 +57,11 @@ This isn't a story in the sense `docs/story-process.md` describes - there's no u
 - [x] `docs/adr/` created, one file per decision from the mechanical/judgment/process classification, consistent template (status, scope/paths for relevance-filtering, enforcement type) - 22 ADRs
 - [x] `docs/architecture.md`, `docs/standards.md`, `docs/development-practice.md` rewritten down to short pointers wherever their content moved into an ADR
 - [x] `docs/story-process.md` updated so implementation starts by reading the path-relevant ADRs, after the story, before writing code
-- [ ] The pre-commit hook itself: computes the diff, filters ADRs to those that are both path-relevant *and* judgment-tier (mechanically-enforced ADRs are skipped - `go test`/`golangci-lint`/mutation testing already gate those), spins up one subagent per remaining ADR against the diff
-- [ ] Violation handling wired up as agreed: an obvious fix gets applied and retried by the coding agent; a non-obvious fix stops and starts a conversation rather than guessing
+- [x] Four subagents built: `.claude/agents/{coder,adr-checker,mutation-gap-closer,story-drift-checker}.md`
+- [x] Two skills built: `.claude/skills/{story,precommit}/SKILL.md` - `/story` facilitates example mapping, `/precommit` runs the mechanical gates, fans out `adr-checker` per relevant ADR, and marks the diff clean
+- [x] `.claude/hooks/check-precommit.sh` written and verified standalone - all three states tested directly (no marker → blocks, stale marker → blocks, matching marker → passes)
+- [x] `.claude/settings.json` PreToolUse hook config written (`Bash` matcher, `if: "Bash(git commit*)"`), schema-validated with `jq -e`
+- [x] **Confirmed live in a running session.** With no `.claude/precommit-passed` marker present, `git commit --help` was blocked by the `PreToolUse` hook with the expected "No precommit check has been run yet. Run the /precommit skill before committing." message - the hook fires on the real `Bash(git commit*)` pattern match, not just in isolation.
 
 ## Note on the first commit(s)
 

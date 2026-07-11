@@ -8,6 +8,12 @@ import (
 
 // Every direct (non-indirect) dependency must be flagged here before it's
 // added - see docs/adr/0005-no-new-dependencies.md.
+//
+// This deliberately only scans the require (...) block, not go.mod's tool
+// (...) directive. Dev tooling (mage, golangci-lint, go-mutesting) never
+// ships in the production image and any addition already shows up as a
+// reviewable diff in go.mod, so it doesn't need the same mechanical gate
+// as a runtime dependency.
 var allowlist = map[string]bool{
 	"github.com/testcontainers/testcontainers-go": true,
 }
