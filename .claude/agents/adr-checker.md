@@ -9,6 +9,8 @@ You review a git diff against exactly one ADR - the one named in your prompt. Yo
 
 Read the ADR in full - its Decision, Rationale, and Consequences sections matter as much as the one-line summary. Read the diff (`git diff` against the base given in your prompt, or the specific files named). Check whether the diff upholds the ADR's decision.
 
+If you need to scan across multiple ADRs or files, use the `Grep`/`Glob` tools directly rather than a Bash shell loop - a `for` loop has no safe fixed prefix for the permission system to recognize, so it triggers an interactive approval prompt every time; `Grep`/`Glob` don't go through shell permission checks at all.
+
 Most ADRs already tell you what to look for in their own text - many were written with "a subagent reviewing a diff checks whether..." as part of their Enforcement section. Start there.
 
 For each violation you find, determine whether the fix is obvious (a straightforward, unambiguous change with no real judgment call) or not. Report every finding with ReportFindings, and be explicit in your summary about which category it falls into - the calling process needs that distinction to decide whether to auto-fix or stop and ask.

@@ -10,7 +10,7 @@ You implement one story from `stories/backlog/` end-to-end. You do not commit - 
 ## Before writing any code
 
 1. Read the story file in full: the Gherkin scenarios, and critically, the **rules** section - the rules are what you're actually building, the scenarios are illustrations of them (`docs/story-process.md`).
-2. Identify which packages the story will touch, and read every ADR in `docs/adr/` whose `scope` overlaps those packages (`docs/story-process.md`, "Reading ADRs before writing code"). Do this now, not as you go - the point is writing it correctly the first time, not discovering a violation after the fact.
+2. Identify which packages the story will touch, and read every ADR in `docs/adr/` whose `scope` overlaps those packages (`docs/story-process.md`, "Reading ADRs before writing code"). Do this now, not as you go - the point is writing it correctly the first time, not discovering a violation after the fact. Use the `Grep`/`Glob` tools directly for this rather than a Bash shell loop over `docs/adr/*.md` - a `for` loop has no safe fixed prefix for the permission system to recognize, so it triggers an interactive approval prompt every time; `Grep`/`Glob` don't go through shell permission checks at all.
 3. Read `docs/development-practice.md`, `docs/architecture.md`, and `docs/standards.md` if you haven't internalised them already this session - they're the index into the ADRs and won't repeat what's already there.
 
 ## Building it
@@ -26,6 +26,8 @@ Apply every relevant ADR as you go, not as an afterthought - commands as single 
 ## Verifying your own work
 
 Before handing back, run `go tool mage test` and `go tool mage lint` yourself and make sure both are clean. If either fails and the fix isn't obvious, stop and report what's blocking you rather than pushing through with a workaround - do not loosen a test to make it pass (`docs/adr/0016-dont-loosen-a-test.md`), ever, under any circumstance.
+
+Never run `docker` commands directly (`docker info`, `docker ps`, etc.) to pre-flight-check that Docker/testcontainers is reachable before running tests - `go tool mage test` already exercises the container driver via testcontainers-go (`docs/adr/0022-specifications-and-drivers.md`) and will fail with a clear message if Docker isn't reachable. Probing it yourself adds an extra, unallowlisted command for no benefit; let the test surface the problem if there is one.
 
 ## Finishing the story
 

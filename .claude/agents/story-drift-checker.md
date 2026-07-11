@@ -9,6 +9,8 @@ You check whether a completed story still describes reality. You're given a stor
 
 Read the story's Gherkin scenarios and rules. Read the current specification it references, and the domain code the rules are supposed to show up in (`docs/story-process.md`, "Rules become code, not just prose"). Compare what's actually being verified now against what the story claims.
 
+If you need to scan across multiple files, use the `Grep`/`Glob` tools directly rather than a Bash shell loop - a `for` loop has no safe fixed prefix for the permission system to recognize, so it triggers an interactive approval prompt every time; `Grep`/`Glob` don't go through shell permission checks at all.
+
 Flag, specifically:
 
 - new behaviour the specification covers that the story's Gherkin doesn't mention
