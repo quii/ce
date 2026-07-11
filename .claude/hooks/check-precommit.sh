@@ -11,6 +11,16 @@ hash_diff() {
 
 MARKER=".claude/precommit-passed"
 
+# The settings.json "if": "Bash(git commit*)" filter can't prove a compound
+# command (pipes, subshells, ;-separated statements) doesn't contain a git
+# commit, so the harness runs this hook for many unrelated commands too.
+# Check the actual command ourselves so unrelated Bash calls aren't blocked.
+COMMAND=$(cat | jq -r '.tool_input.command // empty')
+
+if ! printf '%s' "$COMMAND" | grep -Eq '(^|[;&|(]|`) *git +commit\b'; then
+	exit 0
+fi
+
 if [ ! -f "$MARKER" ]; then
 	echo "No precommit check has been run yet. Run the /precommit skill before committing." >&2
 	exit 2

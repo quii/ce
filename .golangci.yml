@@ -44,14 +44,8 @@ linters:
       rules:
         - name: argument-limit
           arguments: [2]
-          exclude:
-            - "cmd/**"
-            - "internal/domain/**"
-            - "internal/adapters/**"
-            - "internal/archtest/**"
-            - "internal/depcheck/**"
-            - "specifications/**"
           # applies to internal/ports/in and internal/ports/out only - see docs/adr/0003-commands-not-parameter-lists.md
+          # scoped via linters.exclusions.rules below, not this rule's own "exclude" field - see that section for why
         - name: file-length-limit
           arguments:
             - max: 250
@@ -60,6 +54,15 @@ linters:
 
   exclusions:
     rules:
+      # argument-limit's own per-rule "exclude" field (nested under settings.revive.rules[])
+      # does not work in golangci-lint v2.12.2 - verified empirically: functions were still
+      # flagged in every one of these paths despite being listed there. This mechanism
+      # (golangci-lint's own path/linters/text exclusion, proven working below for
+      # file-length-limit) is used instead.
+      - path: "^(cmd|internal/domain|internal/adapters|internal/archtest|internal/depcheck|specifications)/"
+        linters:
+          - revive
+        text: "argument-limit"
       - path: "_test\\.go"
         linters:
           - revive
