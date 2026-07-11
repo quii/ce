@@ -21,14 +21,14 @@ func Test() error {
 
 // Lint runs golangci-lint over the whole module.
 func Lint() error {
-	return run("golangci-lint", "run", "./...")
+	return run("go", "tool", "golangci-lint", "run", "./...")
 }
 
 // Mutate runs mutation testing scoped to the pending diff (working tree vs
 // the last commit), failing if any mutant escapes and logging escapes in a
 // format meant for an agent to consume - see docs/adr/0020-mutation-testing.md.
 func Mutate() error {
-	return run("go-mutesting",
+	return run("go", "tool", "go-mutesting",
 		"--git-diff-lines", "--git-diff-base=HEAD",
 		"--fail-on-escaped",
 		"--logger-agentic-json",

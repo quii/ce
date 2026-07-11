@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(go tool mage *)",
+      "Bash(go tool golangci-lint *)",
+      "Bash(go tool go-mutesting *)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

@@ -23,3 +23,8 @@ When a mutant survives, either the missing test gets written, or - if there's ge
 ## Enforcement
 
 This ADR *is* an enforcement mechanism for other decisions (`docs/adr/0013-implement-only-the-current-test.md`, `docs/adr/0014-outside-in-tdd.md`) rather than something checked by a subagent itself - it's a gate, not a shape to review.
+
+## Known tool quirks
+
+- `--git-diff-lines` doesn't find mutations in files that are entirely new and untracked by git - the file needs to be `git add`-ed (staged) to see a diff against `HEAD` first (see `stories/iteration-0.md`).
+- `specifications/greeting.go` reliably fails to compile in isolation (`undefined: Driver`) when go-mutesting builds it standalone, even against a completely empty diff (verified by running with `--git-diff-base=HEAD` on a clean tree matching `HEAD`). This is harmless: it prints to stderr but the run still reports `0 killed, 0 escaped` and exits `0`, so it doesn't block a commit. It's a pre-existing quirk in how the tool isolates that file, not something introduced by a particular change - no need to re-investigate it each time it shows up.
