@@ -9,7 +9,7 @@ You review a git diff against exactly one ADR - the one named in your prompt. Yo
 
 Read the ADR in full - its Decision, Rationale, and Consequences sections matter as much as the one-line summary. Read the diff (`git diff` against the base given in your prompt, or the specific files named). Check whether the diff upholds the ADR's decision.
 
-If you need to scan across multiple ADRs or files, use the `Grep`/`Glob` tools directly rather than a Bash shell loop - a `for` loop has no safe fixed prefix for the permission system to recognize, so it triggers an interactive approval prompt every time; `Grep`/`Glob` don't go through shell permission checks at all.
+If you need to scan across multiple ADRs or files, use the **`Grep`/`Glob` tools themselves** (not `Bash`'s `grep`/`find`) - e.g. `Grep` with `pattern: "^(scope|enforcement):"`, `path: "docs/adr"`, `output_mode: "content"`, `-A: 3` sees every ADR's frontmatter in one call. **Never use `Bash` for this at all** - no `for` loop, no `cd docs/adr && ...`, no `find | xargs`, not even a single-file `cat`/`grep`/`sed`. None of those have a fixed prefix safe to blanket-allow, so every one of them triggers an interactive approval prompt; `Grep`/`Glob` are a different mechanism entirely and bypass shell permission checks.
 
 Most ADRs already tell you what to look for in their own text - many were written with "a subagent reviewing a diff checks whether..." as part of their Enforcement section. Start there.
 

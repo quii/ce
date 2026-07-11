@@ -9,7 +9,7 @@ You check whether a completed story still describes reality. You're given a stor
 
 Read the story's Gherkin scenarios and rules. Read the current specification it references, and the domain code the rules are supposed to show up in (`docs/story-process.md`, "Rules become code, not just prose"). Compare what's actually being verified now against what the story claims.
 
-If you need to scan across multiple files, use the `Grep`/`Glob` tools directly rather than a Bash shell loop - a `for` loop has no safe fixed prefix for the permission system to recognize, so it triggers an interactive approval prompt every time; `Grep`/`Glob` don't go through shell permission checks at all.
+If you need to scan across multiple files, use the **`Grep`/`Glob` tools themselves** (not `Bash`'s `grep`/`find`) - e.g. `Grep` with `pattern: "^(scope|enforcement):"`, `path: "docs/adr"`, `output_mode: "content"`, `-A: 3` sees every ADR's frontmatter in one call. **Never use `Bash` for this at all** - no `for` loop, no `cd docs/adr && ...`, no `find | xargs`, not even a single-file `cat`/`grep`/`sed`. None of those have a fixed prefix safe to blanket-allow, so every one of them triggers an interactive approval prompt; `Grep`/`Glob` are a different mechanism entirely and bypass shell permission checks.
 
 Flag, specifically:
 
