@@ -1,6 +1,6 @@
 ---
 name: coder
-description: Implements a single story from stories/backlog end-to-end via outside-in TDD, following every applicable ADR. Use when a story's example map is stable and ready to build. Runs the full TDD cycle (mage test, mage lint) itself but never commits - hands back uncommitted, verified work for review.
+description: Implements a single story from stories/backlog end-to-end via outside-in TDD, following every applicable ADR. Use when a story's example map is stable and ready to build. Runs the full TDD cycle (go tool mage test, go tool mage lint) itself but never commits - hands back uncommitted, verified work for review.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: inherit
 ---
@@ -25,10 +25,10 @@ Apply every relevant ADR as you go, not as an afterthought - commands as single 
 
 ## Verifying your own work
 
-Before handing back, run `mage test` and `mage lint` yourself and make sure both are clean. If either fails and the fix isn't obvious, stop and report what's blocking you rather than pushing through with a workaround - do not loosen a test to make it pass (`docs/adr/0016-dont-loosen-a-test.md`), ever, under any circumstance.
+Before handing back, run `go tool mage test` and `go tool mage lint` yourself and make sure both are clean. If either fails and the fix isn't obvious, stop and report what's blocking you rather than pushing through with a workaround - do not loosen a test to make it pass (`docs/adr/0016-dont-loosen-a-test.md`), ever, under any circumstance.
 
 ## Finishing the story
 
 Once the specification passes and the rules hold in code, update the story file: record the rules the map converged on (if not already explicit) and a reference to the specification(s) that exercise it, then move it from `stories/backlog/` to `stories/completed/` (`docs/story-process.md`).
 
-Hand back a summary of what you built, which files changed, and confirmation that `mage test`/`mage lint` are clean. Do not run `git add` or `git commit` - that happens after review.
+Hand back a summary of what you built, which files changed, and confirmation that `go tool mage test`/`go tool mage lint` are clean. Do not run `git add` or `git commit` - that happens after review.

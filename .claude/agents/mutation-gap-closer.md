@@ -1,6 +1,6 @@
 ---
 name: mutation-gap-closer
-description: Reads go-mutesting's agentic JSON output (escaped mutants) and writes the test that would kill each one, or deletes the code if it turns out to have no real behaviour worth testing. Invoked after `mage mutate` reports escapees (docs/adr/0020-mutation-testing.md).
+description: Reads go-mutesting's agentic JSON output (escaped mutants) and writes the test that would kill each one, or deletes the code if it turns out to have no real behaviour worth testing. Invoked after `go tool mage mutate` reports escapees (docs/adr/0020-mutation-testing.md).
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: inherit
 ---
@@ -14,6 +14,6 @@ For each escaped mutant:
 3. If it's a real gap, write the test that would kill this specific mutant - not a broad rewrite of the surrounding tests, the smallest addition that pins down the behaviour the mutation revealed as untested. Follow `docs/adr/0012-clear-assertion-messages.md` - the new test's failure message has to actually say what broke.
 4. If the code has no real behaviour worth testing, delete it rather than writing a test to satisfy the tool - `docs/adr/0020-mutation-testing.md` is explicit that this is the other valid outcome.
 
-After each fix, re-run `mage mutate` to confirm the mutant is actually killed, not just that you wrote something that looks like a test. Never widen an existing test's tolerance or delete an existing case to make a mutation score look better - that's `docs/adr/0016-dont-loosen-a-test.md` territory, not what you're here to do.
+After each fix, re-run `go tool mage mutate` to confirm the mutant is actually killed, not just that you wrote something that looks like a test. Never widen an existing test's tolerance or delete an existing case to make a mutation score look better - that's `docs/adr/0016-dont-loosen-a-test.md` territory, not what you're here to do.
 
 Hand back a summary of which mutants you closed and how (test added vs. code deleted), and which - if any - you couldn't resolve confidently, with why.

@@ -1,13 +1,13 @@
 ---
 name: precommit
-description: Runs every gate required before a commit - mechanical (mage test, mage lint, mage mutate) and the ADR check (one adr-checker subagent per relevant judgment-tier ADR) - and writes the marker a commit hook checks for. See docs/source-control.md.
+description: Runs every gate required before a commit - mechanical (go tool mage test, go tool mage lint, go tool mage mutate) and the ADR check (one adr-checker subagent per relevant judgment-tier ADR) - and writes the marker a commit hook checks for. See docs/source-control.md.
 ---
 
 Run before every commit, in this order:
 
 ## 1. Mechanical gates
 
-Run `mage test`, `mage lint`, and `mage mutate` yourself, in the main conversation - these are deterministic and don't need a subagent. If any fails, stop here and fix it (or hand off to the `coder` agent to fix it) before going any further - there's no point running the ADR check against code that doesn't even pass the gates that exist to catch mistakes mechanically.
+Run `go tool mage test`, `go tool mage lint`, and `go tool mage mutate` yourself, in the main conversation - these are deterministic and don't need a subagent. Use `go tool mage <target>` rather than bare `mage <target>` - it resolves the tool via `go.mod`'s `tool` directive regardless of whether `$GOPATH/bin` happens to be on `PATH`. If any fails, stop here and fix it (or hand off to the `coder` agent to fix it) before going any further - there's no point running the ADR check against code that doesn't even pass the gates that exist to catch mistakes mechanically.
 
 ## 2. Determine which ADRs are relevant
 
