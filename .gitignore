@@ -1,6 +1,2 @@
-/report.json
-/go-mutesting-agentic.json
-/go-mutesting-summary.json
-/go-mutesting-baseline.json
-/go-mutesting-report.html
+/gremlins-report.json
 /.claude/precommit-passed

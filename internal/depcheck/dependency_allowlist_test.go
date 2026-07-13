@@ -10,7 +10,7 @@ import (
 // added - see docs/adr/0005-no-new-dependencies.md.
 //
 // This deliberately only scans the require (...) block, not go.mod's tool
-// (...) directive. Dev tooling (mage, golangci-lint, go-mutesting) never
+// (...) directive. Dev tooling (mage, golangci-lint, gremlins) never
 // ships in the production image and any addition already shows up as a
 // reviewable diff in go.mod, so it doesn't need the same mechanical gate
 // as a runtime dependency.
