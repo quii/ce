@@ -16,6 +16,21 @@ func run(name string, args ...string) error {
 	return cmd.Run()
 }
 
+// Run runs the application via go run, inheriting the current environment (set CE_ROLE to change the startup role).
+func Run() error {
+	cmd := exec.Command("go", "run", "./cmd/ce")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = append(os.Environ())
+	return cmd.Run()
+}
+
+// Up builds and starts all services via docker compose.
+func Up() error {
+	return run("docker", "compose", "up", "--build")
+}
+
 // Test runs the full test suite: race detector, three runs, shuffled order.
 func Test() error {
 	return run("go", "test", "-race", "-count=3", "-shuffle=on", "./...")
