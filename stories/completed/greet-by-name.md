@@ -53,13 +53,13 @@ Feature: Greet a particular name
 
 ## Specification
 
-`specifications.GreetingSpecification` (`specifications/greeting.go`) exercises rules 1, 2, 3, and 5 (six scenarios), run via `TestGreeting` against both the in-process driver (`specifications/inprocess/driver_test.go`) and the container driver (`specifications/container/driver_test.go`). The `Driver.Greeting` method (`specifications/driver.go`) takes a plain `name string`.
+`specifications.GreetingSpecification` (`specifications/greeting.go`) exercises rules 1, 2, 3, and 5 (six scenarios), run via `TestGreeting` against both the in-process driver (`specifications/inprocess/driver_test.go`) and the container driver (`specifications/container/driver_test.go`). Per `docs/adr/0022-specifications-and-drivers.md`, the specification is written directly against the real in-port, `in.Greeter` (`internal/ports/in/get_greeting.go`) - there's no bespoke `Driver` type. The in-process driver *is* the real use case, called directly; the container driver implements `Greeter` by translating a `GetGreetingCommand` into an HTTP request and the JSON response back into a `domain.Greeting`.
 
 Rule 4 (a repeated `name` parameter uses the first value) is deliberately not part of the driver-agnostic specification: "repeated query key" is an HTTP transport detail with no equivalent below the HTTP layer, so the in-process driver couldn't exercise it against real production code - it could only fabricate the behaviour in driver glue. It's covered instead by a narrow unit test directly on the handler: `TestGreetingHandler_RepeatedNameParameterUsesFirstValue` (`internal/adapters/httpapi/greeting_handler_test.go`).
 
 The rules are enforced in code as follows:
 
 - Rule 1 & 5: `domain.Name.Greet()` (`internal/domain/greeting.go`) builds `"Hello, <name>!"` from any non-blank name, with no further validation.
-- Rule 2: `domain.NewName` trims the raw input before it's used anywhere.
-- Rule 3: `GetGreetingUseCase.Handle` (`internal/ports/in/get_greeting.go`) falls back to `out.GreetingFinder` when the trimmed name is blank.
+- Rule 2: `domain.NewName` trims the raw input - `GetGreetingCommand.Name` is a plain `string` (a `Command` carries raw, unvalidated input - `docs/adr/0010-tiny-types.md`), and `GetGreetingUseCase.Greet` (`internal/ports/in/get_greeting.go`) constructs the trimmed `domain.Name` as its first step, the one place this happens no matter which driver built the command.
+- Rule 3: `GetGreetingUseCase.Greet` falls back to `out.GreetingFinder` when the trimmed name is blank.
 - Rule 4: `net/url`'s `Query().Get("name")` in the HTTP handler (`internal/adapters/httpapi/greeting_handler.go`) resolves a repeated query parameter to its first value before it ever reaches the use case.

@@ -4,21 +4,20 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
 
 type GreetingHandler struct {
-	useCase *in.GetGreetingUseCase
+	useCase in.Greeter
 }
 
-func NewGreetingHandler(useCase *in.GetGreetingUseCase) *GreetingHandler {
+func NewGreetingHandler(useCase in.Greeter) *GreetingHandler {
 	return &GreetingHandler{useCase: useCase}
 }
 
 func (h *GreetingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	name := domain.NewName(r.URL.Query().Get("name"))
-	greeting, err := h.useCase.Handle(r.Context(), in.GetGreetingCommand{Name: name})
+	name := r.URL.Query().Get("name")
+	greeting, err := h.useCase.Greet(r.Context(), in.GetGreetingCommand{Name: name})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

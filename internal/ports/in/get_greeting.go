@@ -8,20 +8,25 @@ import (
 )
 
 type GetGreetingCommand struct {
-	Name domain.Name
+	Name string
 }
 
-type GetGreetingUseCase struct {
+type Greeter interface {
+	Greet(ctx context.Context, cmd GetGreetingCommand) (domain.Greeting, error)
+}
+
+type getGreetingUseCase struct {
 	greetings out.GreetingFinder
 }
 
-func NewGetGreetingUseCase(greetings out.GreetingFinder) *GetGreetingUseCase {
-	return &GetGreetingUseCase{greetings: greetings}
+func NewGetGreetingUseCase(greetings out.GreetingFinder) Greeter {
+	return &getGreetingUseCase{greetings: greetings}
 }
 
-func (uc *GetGreetingUseCase) Handle(ctx context.Context, cmd GetGreetingCommand) (domain.Greeting, error) {
-	if cmd.Name.IsBlank() {
+func (uc *getGreetingUseCase) Greet(ctx context.Context, cmd GetGreetingCommand) (domain.Greeting, error) {
+	name := domain.NewName(cmd.Name)
+	if name.IsBlank() {
 		return uc.greetings.FindGreeting(ctx)
 	}
-	return cmd.Name.Greet(), nil
+	return name.Greet(), nil
 }

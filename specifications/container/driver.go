@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/quii/ce/internal/domain"
+	"github.com/quii/ce/internal/ports/in"
 )
 
 type Driver struct {
@@ -17,11 +20,11 @@ func New(baseURL string) *Driver {
 	return &Driver{baseURL: baseURL, client: http.DefaultClient}
 }
 
-func (d *Driver) Greeting(ctx context.Context, name string) (string, error) {
+func (d *Driver) Greet(ctx context.Context, cmd in.GetGreetingCommand) (domain.Greeting, error) {
 	target := d.baseURL + "/greeting"
-	if name != "" {
+	if cmd.Name != "" {
 		query := url.Values{}
-		query.Add("name", name)
+		query.Add("name", cmd.Name)
 		target += "?" + query.Encode()
 	}
 
@@ -47,5 +50,5 @@ func (d *Driver) Greeting(ctx context.Context, name string) (string, error) {
 		return "", err
 	}
 
-	return body.Greeting, nil
+	return domain.Greeting(body.Greeting), nil
 }
