@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 )
 
 type Driver struct {
@@ -16,8 +17,15 @@ func New(baseURL string) *Driver {
 	return &Driver{baseURL: baseURL, client: http.DefaultClient}
 }
 
-func (d *Driver) Greeting(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.baseURL+"/greeting", nil)
+func (d *Driver) Greeting(ctx context.Context, name string) (string, error) {
+	target := d.baseURL + "/greeting"
+	if name != "" {
+		query := url.Values{}
+		query.Add("name", name)
+		target += "?" + query.Encode()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return "", err
 	}
