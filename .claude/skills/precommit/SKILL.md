@@ -29,4 +29,4 @@ For each violation reported:
 
 ## 5. Mark it clean
 
-Once every gate passes and every applicable ADR check comes back clean, write the diff's hash to `.claude/precommit-passed` (the same hash the `check-precommit.sh` hook computes: `git diff --cached | shasum -a 256`) - this is what lets `git commit` through. Then tell the user it's ready to commit.
+Once every gate passes and every applicable ADR check comes back clean, write the diff's hash to `.precommit-passed` (the same hash the `check-precommit.sh` hook computes: `git diff --cached | shasum -a 256`) - this is what lets `git commit` through. Then tell the user it's ready to commit.

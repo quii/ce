@@ -9,7 +9,7 @@ hash_diff() {
 	fi
 }
 
-MARKER=".claude/precommit-passed"
+MARKER=".precommit-passed"
 
 # The settings.json "if": "Bash(git commit*)" filter can't prove a compound
 # command (pipes, subshells, ;-separated statements) doesn't contain a git
