@@ -35,6 +35,17 @@ const mutateReportPath = "gremlins-report.json"
 // (e.g. a docs-only commit) skips the run entirely instead of gating on
 // unrelated, pre-existing debt elsewhere in the repo.
 //
+// --integration is required: by default gremlins only runs `go test` on
+// the package containing the mutated file, not the whole module. Most of
+// this project's domain/use-case code has no _test.go files of its own -
+// it's only exercised through the separate specifications package (outside-
+// in TDD) - so without --integration every mutation there trivially
+// "survives" (nothing in that package's own test run can fail). Confirmed
+// by hand: two real mutants gremlins reported as LIVED were proven to be
+// genuinely killed by manually applying them and running `go test ./...`
+// directly; adding --integration (which switches gremlins' own test
+// target to ./... per mutant) made both resolve to KILLED.
+//
 // The gate is enforced here off the JSON report's mutants_lived count
 // rather than gremlins' own --threshold-efficacy/--threshold-mcover flags:
 // those are silently inert in v0.6.0 (a viper/pflag float64 casting gap -
@@ -51,6 +62,7 @@ func Mutate() error {
 		"--diff=HEAD",
 		"--coverpkg=./...",
 		"--timeout-coefficient=30",
+		"--integration",
 		"-o", mutateReportPath,
 		".",
 	); err != nil {
