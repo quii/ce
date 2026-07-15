@@ -28,7 +28,11 @@ func Run() error {
 
 // Up builds and starts all services via docker compose.
 func Up() error {
-	return run("docker", "compose", "up", "--build")
+	cmd := exec.Command("docker", "compose", "up", "--build")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=0")
+	return cmd.Run()
 }
 
 // Test runs the full test suite: race detector, three runs, shuffled order.
