@@ -4,6 +4,8 @@
       "Bash(go tool mage *)",
       "Bash(go tool golangci-lint *)",
       "Bash(go tool gremlins *)",
+      "Bash(mkdir -p stories/*)",
+      "Bash(mv stories/backlog/*)",
       "Bash(git status*)",
       "Bash(git diff*)",
       "Bash(git log*)",
