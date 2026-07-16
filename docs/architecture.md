@@ -4,7 +4,8 @@ We're loosely following a DDD / hexagonal shape. Dependencies point inward: adap
 
 ## Ports and adapters
 
-- **In ports** - use cases, the application's public surface (e.g. "start conversation", "post message", "edit message"). HTTP handlers call into these, nothing else.
+- **In ports** - interfaces modelling a user doing a job, the application's public surface (e.g. "start conversation", "post message", "edit message"). HTTP handlers call into these, nothing else.
+- **Use cases** - the concrete implementation of an in-port, typically constructed with fast in-memory out-ports for tests and real ones in production. Specifications (`docs/adr/0022-specifications-and-drivers.md`) drive a use case through its in-port, not through use-case-specific internals.
 - **Out ports** - interfaces for anything CE depends on externally, e.g. the event store, projections/read db. Adapters (Postgres, fakes) implement these interfaces; the domain and use cases only ever see the interface, never the concrete adapter.
 
 ## Decisions
