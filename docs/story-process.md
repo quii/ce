@@ -32,7 +32,7 @@ A story's rules should show up literally in the domain code - a guard clause, a 
 
 ## From story to specification
 
-An in-port is meant to model a user doing a job (see `docs/architecture.md`), so most stories should point to a specification that drives a single use-case in-port - see `docs/adr/0022-specifications-and-drivers.md` for what a specification is and why it's written against a `Driver` rather than a concrete environment. That specification, run through the in-process driver at minimum, is the automated proof the job works.
+An in-port is meant to model a user doing a job (see `docs/architecture.md`), so most stories should point to a specification that drives a single use-case in-port - see `docs/adr/0022-specifications-and-drivers.md` for what a specification is and why it's written against the in-port interface itself rather than a concrete environment. A driver is an implementation of that in-port for a particular deployment: the in-process driver is the real use case, called directly. That specification, run through the in-process driver at minimum, is the automated proof the job works.
 
 Some stories will exercise more than one in-port - typically one to write, one to read back and confirm the effect. Where that's the case, the story references all the specifications involved, not just one.
 
