@@ -19,6 +19,8 @@ The in-process driver is what runs by default (fast, part of `go test -race -cou
 
 See [Scaling Acceptance Tests](https://quii.gitbook.io/learn-go-with-tests/testing-fundamentals/scaling-acceptance-tests) for the full pattern this is drawn from.
 
+This pattern covers domain-level behaviour reachable through an in-port. Static infrastructure with no in-port at all - serving the OpenAPI spec itself, or its docs UI - has no domain vocabulary to write a specification against and no in-process equivalent to run it twice. `specifications/container/driver_test.go`'s `TestAPIDocs` covers that case directly: a container-level test making plain HTTP calls against the real running container, same infrastructure and lifecycle as the specification-driven tests, without pretending there's an in-port underneath it.
+
 ## Rationale
 
 A specification exercises the domain through its real in-port - the same `Command`/domain types production code uses, not a parallel primitive-only vocabulary invented for tests. This is consistent with how out-ports are already tested (`docs/adr/0009-contract-tests.md` runs contract tests against the real interface, not a stringly-typed stand-in) and reinforces the domain as a first-class citizen rather than something tests route around. Running the identical specification against the in-process driver and a container driver is what gives confidence the containerized deployment actually matches in-process behaviour, without maintaining a second, parallel E2E suite that could drift from the first the same way `docs/adr/0016-dont-loosen-a-test.md` guards against drift within a single suite.

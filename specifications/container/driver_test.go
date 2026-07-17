@@ -3,6 +3,9 @@ package container_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +17,52 @@ import (
 )
 
 func TestGreeting(t *testing.T) {
+	driver := container.New(startCEContainer(t))
+
+	specifications.GreetingSpecification(t, driver)
+}
+
+func TestAPIDocs(t *testing.T) {
+	baseURL := startCEContainer(t)
+
+	t.Run("serves the OpenAPI spec", func(t *testing.T) {
+		body := get(t, baseURL+"/openapi.yaml")
+		if want := "openapi:"; !strings.Contains(body, want) {
+			t.Errorf("response from /openapi.yaml does not contain %q:\n%s", want, body)
+		}
+	})
+
+	t.Run("serves the docs UI", func(t *testing.T) {
+		body := get(t, baseURL+"/docs")
+		if want := "/openapi.yaml"; !strings.Contains(body, want) {
+			t.Errorf("response from /docs does not reference %q:\n%s", want, body)
+		}
+	})
+}
+
+func get(t *testing.T, url string) string {
+	t.Helper()
+
+	resp, err := http.Get(url) //nolint:gosec,noctx // test-only request to a URL we just built from a locally started container
+	if err != nil {
+		t.Fatalf("GET %s failed: %v", url, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s status = %d, want %d", url, resp.StatusCode, http.StatusOK)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("could not read response body from %s: %v", url, err)
+	}
+
+	return string(body)
+}
+
+func startCEContainer(t *testing.T) string {
+	t.Helper()
 	ctx := context.Background()
 
 	req := testcontainers.ContainerRequest{
@@ -48,7 +97,5 @@ func TestGreeting(t *testing.T) {
 		t.Fatalf("failed to get mapped port: %v", err)
 	}
 
-	driver := container.New(fmt.Sprintf("http://%s:%s", host, port.Port()))
-
-	specifications.GreetingSpecification(t, driver)
+	return fmt.Sprintf("http://%s:%s", host, port.Port())
 }
