@@ -11,7 +11,9 @@ Run `go tool mage test`, `go tool mage lint`, and `go tool mage mutate` yourself
 
 ## 2. Determine which ADRs are relevant
 
-Get the diff of what's about to be committed (staged changes against HEAD). Read every ADR's frontmatter in `docs/adr/`. Select the ones where:
+Get the diff of what's about to be committed (staged changes against HEAD). If every changed file is under `cmd/web/**` or `internal/adapters/webui/**` - the demoware web layer, deliberately kept outside the codebase's usual rigor bar (see `docs/source-control.md`) - skip straight to step 5, no ADR check needed.
+
+Otherwise, read every ADR's frontmatter in `docs/adr/`. Select the ones where:
 
 - `enforcement` is `judgment` (skip `mechanical` - already covered by step 1 - and skip `process`, which isn't diff-checked at all)
 - `scope` overlaps the changed files (skip ADRs whose scope doesn't touch anything in the diff)
