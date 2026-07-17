@@ -4,11 +4,23 @@
 package webui
 
 import (
+	"embed"
 	"html/template"
 	"net/http"
 
 	"github.com/quii/ce/internal/adapters/apiclient"
 )
+
+// templates/*.gohtml are parsed once at package init - a new page is a
+// new file dropped in that directory, not a change here. pico.css and
+// htmx are loaded from a CDN rather than vendored, so this stays static
+// files with no new Go dependency (same reasoning as internal/adapters/docs'
+// Scalar page).
+//
+//go:embed templates/*.gohtml
+var templateFS embed.FS
+
+var templates = template.Must(template.ParseFS(templateFS, "templates/*.gohtml"))
 
 type Handler struct {
 	client *apiclient.ClientWithResponses
@@ -27,7 +39,7 @@ func (h *Handler) Routes() *http.ServeMux {
 
 func (h *Handler) index(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = indexTemplate.Execute(w, nil)
+	_ = templates.ExecuteTemplate(w, "index.gohtml", nil)
 }
 
 func (h *Handler) greeting(w http.ResponseWriter, r *http.Request) {
@@ -45,24 +57,5 @@ func (h *Handler) greeting(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = greetingTemplate.Execute(w, resp.JSON200.Greeting)
+	_ = templates.ExecuteTemplate(w, "greeting.gohtml", resp.JSON200.Greeting)
 }
-
-var indexTemplate = template.Must(template.New("index").Parse(`<!doctype html>
-<html>
-<head>
-  <title>ce</title>
-  <script src="https://unpkg.com/htmx.org@2"></script>
-</head>
-<body>
-  <h1>ce</h1>
-  <form hx-get="/greeting" hx-target="#greeting-result">
-    <label>Name <input type="text" name="name"></label>
-    <button type="submit">Greet me</button>
-  </form>
-  <div id="greeting-result"></div>
-</body>
-</html>
-`))
-
-var greetingTemplate = template.Must(template.New("greeting").Parse(`<p>{{.}}</p>`))
