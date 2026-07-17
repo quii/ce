@@ -24,9 +24,9 @@ func NewGetGreetingUseCase(greetings out.GreetingFinder) Greeter {
 }
 
 func (uc *getGreetingUseCase) Greet(ctx context.Context, cmd GetGreetingCommand) (domain.Greeting, error) {
-	name := domain.NewName(cmd.Name)
-	if name.IsBlank() {
-		return uc.greetings.FindGreeting(ctx)
+	prefix, err := uc.greetings.FindPrefix(ctx)
+	if err != nil {
+		return "", err
 	}
-	return name.Greet(), nil
+	return domain.NewName(cmd.Name).Greet(prefix), nil
 }

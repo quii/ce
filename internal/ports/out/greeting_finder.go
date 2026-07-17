@@ -7,5 +7,5 @@ import (
 )
 
 type GreetingFinder interface {
-	FindGreeting(ctx context.Context) (domain.Greeting, error)
+	FindPrefix(ctx context.Context) (domain.Prefix, error)
 }

@@ -12,6 +12,6 @@ func NewGreetingFinder() *GreetingFinder {
 	return &GreetingFinder{}
 }
 
-func (f *GreetingFinder) FindGreeting(_ context.Context) (domain.Greeting, error) {
-	return domain.Greeting("Hello, World!"), nil
+func (f *GreetingFinder) FindPrefix(_ context.Context) (domain.Prefix, error) {
+	return domain.Prefix("Hello"), nil
 }
