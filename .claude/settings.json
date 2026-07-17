@@ -11,8 +11,14 @@
       "Bash(git log*)",
       "Bash(git show*)",
       "Bash(git blame*)",
+      "Bash(git -C * status*)",
+      "Bash(git -C * diff*)",
+      "Bash(git -C * log*)",
+      "Bash(git -C * show*)",
+      "Bash(git -C * blame*)",
       "Bash(shasum*)",
-      "Bash(awk*)"
+      "Bash(awk*)",
+      "Bash(head*)"
     ]
   },
   "hooks": {
