@@ -72,6 +72,15 @@ const mutateReportPath = "gremlins-report.json"
 // returning the raw string; gremlins' Get[float64] then does a failed type
 // assertion against that string and quietly defaults to 0) - confirmed by
 // hand, the threshold never fired at any value before this workaround.
+//
+// --exclude-files skips *.gen.go: golangci-lint already excludes generated
+// files by convention (the "Code generated ... DO NOT EDIT" header), but
+// gremlins has no equivalent built-in behaviour, so it's done explicitly
+// here. Generated code (docs/adr/0024-openapi-spec-first-with-oapi-codegen.md)
+// supports OpenAPI features this project doesn't use yet (e.g. array-style
+// query params), which surfaced as LIVED mutants with no missing test to
+// write - the fix for those is regenerating from a smaller spec, not adding
+// a test that pins down someone else's generated branch.
 func Mutate() error {
 	if err := exec.Command("git", "diff", "--quiet", "HEAD", "--", "*.go").Run(); err == nil {
 		return nil
@@ -82,6 +91,7 @@ func Mutate() error {
 		"--coverpkg=./...",
 		"--timeout-coefficient=30",
 		"--integration",
+		"--exclude-files=.*\\.gen\\.go$",
 		"-o", mutateReportPath,
 		".",
 	); err != nil {

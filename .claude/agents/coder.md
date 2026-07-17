@@ -29,6 +29,14 @@ Run the failing test and read its output before writing the code to pass it. Mak
 
 Apply every relevant ADR as you go, not as an afterthought - commands as single structs, tiny types instead of raw strings, no logging in the domain, time/randomness injected or carried on the command, domain errors staying domain errors, fakes over mocks for out-ports with a shared contract test. If you're unsure whether something applies, re-read the ADR rather than guessing.
 
+## Working with the generated OpenAPI layer
+
+If a story changes the HTTP contract for an existing endpoint or adds a new one (`docs/adr/0024-openapi-spec-first-with-oapi-codegen.md`), `api/openapi.yaml` is the one place that describes it - edit the spec first, then run `go generate ./...` to regenerate `internal/adapters/httpapi/server.gen.go` (strict server) and `specifications/container/client.gen.go` (typed client). Never hand-edit a `*.gen.go` file - it carries a `DO NOT EDIT` banner and your change is silently lost on the next regeneration.
+
+The handler in `internal/adapters/httpapi/` implements the generated `StrictServerInterface` for each operation: unwrap the generated request object into a `Command`, call the use case, wrap the result into the generated response type. Nothing else belongs there (`docs/adr/0007-thin-http-handlers.md`) - request parsing, status codes, and JSON encoding are handled entirely by the generated layer. The container driver in `specifications/container/driver.go` is the mirror image on the client side: translate the in-port's `Command`/domain types to and from the generated client's request/response types, nothing more.
+
+A story that doesn't touch the HTTP contract at all (e.g. pure domain/use-case work exercised only through the in-process driver) never needs to touch the spec or run codegen.
+
 ## Verifying your own work
 
 Before handing back, run `go tool mage test` and `go tool mage lint` yourself and make sure both are clean. If either fails and the fix isn't obvious, stop and report what's blocking you rather than pushing through with a workaround - do not loosen a test to make it pass (`docs/adr/0016-dont-loosen-a-test.md`), ever, under any circumstance.

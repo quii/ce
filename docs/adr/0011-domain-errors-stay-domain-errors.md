@@ -14,6 +14,8 @@ enforcement: judgment
 
 Errors returned from domain or use-case code are sentinel or typed errors defined in the domain, never `net/http` status codes, never a driver-specific error like `sql.ErrNoRows` leaking up from an adapter. Translating a domain error into an HTTP status code is the handler's job and the handler's alone. An adapter that gets `sql.ErrNoRows` back from Postgres translates it to whatever the out port's interface promises (e.g. a domain-level `ErrNotFound`) before it ever leaves the adapter.
 
+Since `docs/adr/0024-openapi-spec-first-with-oapi-codegen.md`, the generated strict-handler wrapper maps any error a handler returns to `500` by default - that default is fine as long as every error a use case can actually produce is genuinely a `500`. The moment a story needs a domain error to map to something else (a domain-level `ErrNotFound` to `404`, say), that translation is still the handler's job: register a `ResponseErrorHandlerFunc` via `NewStrictHandlerWithOptions` that type-switches on the domain error, rather than letting the generated default paper over it or teaching the domain/use-case layer about status codes.
+
 ## Rationale
 
 The same thin-handler boundary (`docs/adr/0007-thin-http-handlers.md`), applied to the error path instead of the happy path.

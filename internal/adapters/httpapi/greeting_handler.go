@@ -1,8 +1,11 @@
+// Package httpapi is the HTTP adapter. server.gen.go is generated from
+// api/openapi.yaml - run `go generate ./...` after editing the spec.
+//
+//go:generate go tool oapi-codegen -config oapi-codegen.yaml ../../../api/openapi.yaml
 package httpapi
 
 import (
-	"encoding/json"
-	"net/http"
+	"context"
 
 	"github.com/quii/ce/internal/ports/in"
 )
@@ -15,18 +18,16 @@ func NewGreetingHandler(useCase in.Greeter) *GreetingHandler {
 	return &GreetingHandler{useCase: useCase}
 }
 
-func (h *GreetingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Query().Get("name")
-	greeting, err := h.useCase.Greet(r.Context(), in.GetGreetingCommand{Name: name})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+func (h *GreetingHandler) GetGreeting(ctx context.Context, request GetGreetingRequestObject) (GetGreetingResponseObject, error) {
+	var name string
+	if request.Params.Name != nil {
+		name = *request.Params.Name
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(greetingResponse{Greeting: string(greeting)})
-}
+	greeting, err := h.useCase.Greet(ctx, in.GetGreetingCommand{Name: name})
+	if err != nil {
+		return nil, err
+	}
 
-type greetingResponse struct {
-	Greeting string `json:"greeting"`
+	return GetGreeting200JSONResponse{Greeting: string(greeting)}, nil
 }

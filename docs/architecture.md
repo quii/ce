@@ -15,5 +15,6 @@ Specifics live in `docs/adr/`, each with its own rationale and enforcement mecha
 - [0001 - Domain purity](adr/0001-domain-purity.md)
 - [0006 - Rich domain, not anemic](adr/0006-rich-domain-not-anemic.md)
 - [0007 - Thin HTTP handlers](adr/0007-thin-http-handlers.md)
+- [0024 - Spec-first OpenAPI with oapi-codegen](adr/0024-openapi-spec-first-with-oapi-codegen.md)
 - [0018 - CQRS](adr/0018-cqrs.md)
 - [0019 - Event sourcing with a transactional outbox](adr/0019-event-sourcing-transactional-outbox.md) - mechanics in `docs/write-path.md`

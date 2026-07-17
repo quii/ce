@@ -1,54 +1,44 @@
+// client.gen.go is generated from api/openapi.yaml - run `go generate ./...`
+// after editing the spec.
+//
+//go:generate go tool oapi-codegen -config oapi-codegen.yaml ../../api/openapi.yaml
 package container
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
 
 type Driver struct {
-	baseURL string
-	client  *http.Client
+	client *ClientWithResponses
 }
 
 func New(baseURL string) *Driver {
-	return &Driver{baseURL: baseURL, client: http.DefaultClient}
+	client, err := NewClientWithResponses(baseURL)
+	if err != nil {
+		panic(err)
+	}
+	return &Driver{client: client}
 }
 
 func (d *Driver) Greet(ctx context.Context, cmd in.GetGreetingCommand) (domain.Greeting, error) {
-	target := d.baseURL + "/greeting"
+	var params GetGreetingParams
 	if cmd.Name != "" {
-		query := url.Values{}
-		query.Add("name", cmd.Name)
-		target += "?" + query.Encode()
+		params.Name = &cmd.Name
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	resp, err := d.client.GetGreetingWithResponse(ctx, &params)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	if resp.StatusCode() != http.StatusOK || resp.JSON200 == nil {
+		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode())
 	}
 
-	var body struct {
-		Greeting string `json:"greeting"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return "", err
-	}
-
-	return domain.Greeting(body.Greeting), nil
+	return domain.Greeting(resp.JSON200.Greeting), nil
 }

@@ -1,7 +1,7 @@
 package httpapi_test
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,24 +11,35 @@ import (
 	"github.com/quii/ce/internal/ports/in"
 )
 
-func TestGreetingHandler_RepeatedNameParameterUsesFirstValue(t *testing.T) {
+func TestGreetingHandler_GetGreeting(t *testing.T) {
 	useCase := in.NewGetGreetingUseCase(memory.NewGreetingFinder())
 	handler := httpapi.NewGreetingHandler(useCase)
+
+	name := "Chris"
+	got, err := handler.GetGreeting(context.Background(), httpapi.GetGreetingRequestObject{
+		Params: httpapi.GetGreetingParams{Name: &name},
+	})
+	if err != nil {
+		t.Fatalf("GetGreeting(%q) returned an unexpected error: %v", name, err)
+	}
+
+	want := httpapi.GetGreeting200JSONResponse{Greeting: "Hello, Chris!"}
+	if got != want {
+		t.Errorf("GetGreeting(%q) = %#v, want %#v", name, got, want)
+	}
+}
+
+func TestGreetingHandler_RepeatedNameParameterIsRejected(t *testing.T) {
+	useCase := in.NewGetGreetingUseCase(memory.NewGreetingFinder())
+	handler := httpapi.NewGreetingHandler(useCase)
+	server := httpapi.Handler(httpapi.NewStrictHandler(handler, nil))
 
 	req := httptest.NewRequest(http.MethodGet, "/greeting?name=Chris&name=Sam", nil)
 	rec := httptest.NewRecorder()
 
-	handler.ServeHTTP(rec, req)
+	server.ServeHTTP(rec, req)
 
-	var body struct {
-		Greeting string `json:"greeting"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("could not decode response body: %v", err)
-	}
-
-	want := "Hello, Chris!"
-	if body.Greeting != want {
-		t.Errorf("greeting = %q, want %q", body.Greeting, want)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }

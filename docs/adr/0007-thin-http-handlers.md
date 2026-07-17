@@ -11,7 +11,9 @@ enforcement: judgment
 
 ## Decision
 
-A handler's job: parse the request into a command, call the relevant use case (in port), translate the result into a response. Nothing else. If a handler needs an `if` that isn't about an HTTP concern - status code, content negotiation, request parsing - that logic belongs in the use case, not the handler.
+A handler's job: translate a generated request object into a command, call the relevant use case (in port), translate the result into a generated response object. Nothing else. If a handler needs an `if` that isn't about that translation, that logic belongs in the use case, not the handler.
+
+Since `docs/adr/0024-openapi-spec-first-with-oapi-codegen.md`, wire-level concerns - request parsing, status codes, content negotiation, JSON (de)serialisation - live entirely in generated code (`*.gen.go`), which the handler never touches. The handler only ever sees the generated strict-server request/response types on one side and the in-port's `Command`/domain types on the other.
 
 ## Rationale
 

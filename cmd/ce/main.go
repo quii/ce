@@ -33,9 +33,10 @@ func runAPI() {
 	greetings := memory.NewGreetingFinder()
 	useCase := in.NewGetGreetingUseCase(greetings)
 	handler := httpapi.NewGreetingHandler(useCase)
+	strictHandler := httpapi.NewStrictHandler(handler, nil)
 
 	mux := http.NewServeMux()
-	mux.Handle("/greeting", handler)
+	httpapi.HandlerFromMux(strictHandler, mux)
 
 	slog.Info("starting api role", "addr", ":8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {

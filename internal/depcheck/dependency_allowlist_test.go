@@ -16,6 +16,7 @@ import (
 // as a runtime dependency.
 var allowlist = map[string]bool{
 	"github.com/testcontainers/testcontainers-go": true,
+	"github.com/oapi-codegen/runtime":             true,
 }
 
 func TestNoUnapprovedDirectDependencies(t *testing.T) {
