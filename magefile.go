@@ -16,9 +16,16 @@ func run(name string, args ...string) error {
 	return cmd.Run()
 }
 
-// Run runs the application via go run, inheriting the current environment (set CE_ROLE to change the startup role).
-func Run() error {
-	cmd := exec.Command("go", "run", "./cmd/ce")
+// Run runs the given app (api, relay, or web) via go run, inheriting the
+// current environment - e.g. `go tool mage run api`.
+func Run(service string) error {
+	switch service {
+	case "api", "relay", "web":
+	default:
+		return fmt.Errorf("unknown service %q - want one of: api, relay, web", service)
+	}
+
+	cmd := exec.Command("go", "run", "./cmd/"+service)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

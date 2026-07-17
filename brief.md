@@ -47,7 +47,7 @@ For example, a caller can pass multiple `participant` querystring params - `?par
 
 ## Developer experience
 
-The whole stack should come up locally with a single `docker compose up` - Postgres, plus the CE image started twice, once as the API role and once as the relay role. Same image both times, no separate build, no other local dependencies required.
+The whole stack should come up locally with a single `docker compose up` - Postgres, the API, the relay, and a thin `web` app that renders HTML/HTMX over the API's generated client. Each is its own binary under `cmd/`, built from the same Dockerfile via a `SERVICE` build arg, so there's still only one image definition and no other local dependencies required.
 
 # High level technical choices
 

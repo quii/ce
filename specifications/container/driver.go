@@ -1,7 +1,3 @@
-// client.gen.go is generated from api/openapi.yaml - run `go generate ./...`
-// after editing the spec.
-//
-//go:generate go tool oapi-codegen -config oapi-codegen.yaml ../../api/openapi.yaml
 package container
 
 import (
@@ -9,16 +5,17 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/quii/ce/internal/adapters/apiclient"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
 
 type Driver struct {
-	client *ClientWithResponses
+	client *apiclient.ClientWithResponses
 }
 
 func New(baseURL string) *Driver {
-	client, err := NewClientWithResponses(baseURL)
+	client, err := apiclient.NewClientWithResponses(baseURL)
 	if err != nil {
 		panic(err)
 	}
@@ -26,7 +23,7 @@ func New(baseURL string) *Driver {
 }
 
 func (d *Driver) Greet(ctx context.Context, cmd in.GetGreetingCommand) (domain.Greeting, error) {
-	var params GetGreetingParams
+	var params apiclient.GetGreetingParams
 	if cmd.Name != "" {
 		params.Name = &cmd.Name
 	}

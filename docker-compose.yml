@@ -9,17 +9,31 @@ services:
       - "5432:5432"
 
   api:
-    build: .
-    environment:
-      CE_ROLE: api
+    build:
+      context: .
+      args:
+        SERVICE: api
     ports:
       - "8080:8080"
     depends_on:
       - postgres
 
   relay:
-    build: .
-    environment:
-      CE_ROLE: relay
+    build:
+      context: .
+      args:
+        SERVICE: relay
     depends_on:
       - postgres
+
+  web:
+    build:
+      context: .
+      args:
+        SERVICE: web
+    environment:
+      API_BASE_URL: http://api:8080
+    ports:
+      - "8090:8080"
+    depends_on:
+      - api

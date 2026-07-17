@@ -3,9 +3,10 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/ce ./cmd/ce
+ARG SERVICE=api
+RUN CGO_ENABLED=0 go build -o /out/app ./cmd/${SERVICE}
 
 FROM gcr.io/distroless/static-debian12
-COPY --from=build /out/ce /ce
+COPY --from=build /out/app /app
 EXPOSE 8080
-ENTRYPOINT ["/ce"]
+ENTRYPOINT ["/app"]

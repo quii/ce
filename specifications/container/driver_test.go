@@ -71,7 +71,6 @@ func startCEContainer(t *testing.T) string {
 			Dockerfile: "Dockerfile",
 		},
 		ExposedPorts: []string{"8080/tcp"},
-		Env:          map[string]string{"CE_ROLE": "api"},
 		WaitingFor:   wait.ForHTTP("/greeting").WithPort("8080/tcp").WithStartupTimeout(2 * time.Minute),
 	}
 
