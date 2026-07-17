@@ -8,14 +8,13 @@ import (
 	"github.com/quii/ce/api"
 	"github.com/quii/ce/internal/adapters/docs"
 	"github.com/quii/ce/internal/adapters/httpapi"
-	"github.com/quii/ce/internal/adapters/memory"
-	"github.com/quii/ce/internal/ports/in"
 )
 
 func main() {
-	greetings := memory.NewGreetingFinder()
-	useCase := in.NewGetGreetingUseCase(greetings)
-	handler := httpapi.NewGreetingHandler(useCase)
+	outPorts := NewOutPorts()
+	app := NewApplication(outPorts)
+
+	handler := httpapi.NewGreetingHandler(app.GetGreeting)
 	strictHandler := httpapi.NewStrictHandler(handler, nil)
 
 	mux := http.NewServeMux()
