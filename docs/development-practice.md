@@ -8,6 +8,10 @@ See `docs/story-process.md` for where the first test in a story comes from, and 
 
 Don't manually start the server (`go run ./cmd/api`) and `curl` it to check a change works - that's redundant with the test suite already in place, and each manual run/curl needs its own permission prompt for no real benefit. `specifications/container/driver_test.go` already exercises real HTTP behaviour against the actual compiled binary via testcontainers, and `specifications/inprocess/driver_test.go` covers the same behaviour without HTTP at all - `go tool mage test` running both is enough to know an HTTP-facing change works. If a change needs a driving test to prove it, write that test (`docs/adr/0022-specifications-and-drivers.md`, or a narrow handler-level test for transport-only detail) rather than checking by hand.
 
+## Fast and full test tiers
+
+`go tool mage testunit` runs everything except the Docker-backed Postgres and container-driver specifications - no containers started, seconds not minutes. Use it for the inner red-green-refactor loop. `go tool mage test` runs everything, including those, and is what has to be green before a commit lands (`docs/source-control.md`) - see `docs/adr/0028-fast-and-full-test-tiers.md` for why the split exists and how mutation testing (`go tool mage mutate`) decides which tier it needs per diff.
+
 ## Decisions
 
 Specifics live in `docs/adr/`, each with its own rationale and enforcement mechanism:
@@ -21,3 +25,4 @@ Specifics live in `docs/adr/`, each with its own rationale and enforcement mecha
 - [0022 - Specifications and drivers for acceptance-level tests](adr/0022-specifications-and-drivers.md)
 - [0020 - Mutation testing](adr/0020-mutation-testing.md)
 - [0021 - No flaky tests](adr/0021-no-flaky-tests.md)
+- [0028 - Fast and full test tiers, split by build tag](adr/0028-fast-and-full-test-tiers.md)

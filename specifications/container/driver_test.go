@@ -1,3 +1,5 @@
+//go:build integration
+
 package container_test
 
 import (

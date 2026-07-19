@@ -51,6 +51,7 @@ This isn't a story in the sense `docs/story-process.md` describes - there's no u
 - [x] In-process driver implementation, calling the in-port directly
 - [x] Container driver implementation, using testcontainers-go to build and run the real CE image (the same tool already managing Postgres for the contract tests, not separate shell orchestration) and talk to it over HTTP - verified: it actually builds the image, starts the container, waits for real HTTP readiness, and runs the same specification against it
 - [x] The hello-world specification passes through both drivers as part of `mage test` - no separate, slower cadence for now; project's small enough that the cost isn't prohibitive yet (revisit if that changes)
+- Revisited in `docs/adr/0028-fast-and-full-test-tiers.md`: the container driver's per-run cost (two built images, three containers) plus mutation testing's per-mutant `go test ./...` reruns made the "no separate cadence" tradeoff no longer hold. `mage test` still runs everything as the pre-commit gate; a build-tag-gated `mage testunit` now gives the fast, in-memory-only path this item deferred.
 
 ## ADRs and the pre-commit ADR check
 

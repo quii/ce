@@ -15,7 +15,7 @@ Acceptance-level tests are written as **specifications** - domain-centric, imple
 
 For an HTTP-exposed service, the container driver's request/response translation is a thin wrapper around a generated client (`docs/adr/0024-openapi-spec-first-with-oapi-codegen.md`) rather than hand-rolled URL and JSON plumbing - the driver's own code is limited to mapping between the in-port's `Command`/domain types and the generated client's request/response types.
 
-The in-process driver is what runs by default (fast, part of `go test -race -count=3 -shuffle=on ./...`) - it's just the production use case, no adapter code required. A container driver runs the same specifications against the real CE image, brought up via testcontainers-go the same way the Postgres contract tests already bring up real Postgres - not a separate shell-orchestrated suite outside `go test`.
+The in-process driver is what runs by default (fast, part of `go test -race -count=3 -shuffle=on ./...` with no build tag) - it's just the production use case, no adapter code required. A container driver runs the same specifications against the real CE image, brought up via testcontainers-go the same way the Postgres contract tests already bring up real Postgres - not a separate shell-orchestrated suite outside `go test`, but gated behind the `integration` build tag (`docs/adr/0028-fast-and-full-test-tiers.md`) so it's opt-in for the fast, in-memory-only path (`go tool mage testunit`) and always-on for the pre-commit gate (`go tool mage test`).
 
 See [Scaling Acceptance Tests](https://quii.gitbook.io/learn-go-with-tests/testing-fundamentals/scaling-acceptance-tests) for the full pattern this is drawn from.
 

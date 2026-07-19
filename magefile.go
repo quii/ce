@@ -87,14 +87,29 @@ func Up() error {
 	return cmd.Run()
 }
 
-// Test runs the full test suite: race detector, three runs, shuffled order.
+// Test runs the full test suite: race detector, three runs, shuffled order,
+// including the Docker-backed Postgres and container-driver specifications
+// (the "integration" build tag - see docs/adr/0028-fast-and-full-test-tiers.md).
+// This is the pre-commit gate: docs/source-control.md relies on it giving
+// full confidence with no separate CI to catch what it misses.
 func Test() error {
+	return run("go", "test", "-race", "-count=3", "-shuffle=on", "-tags=integration", "./...")
+}
+
+// TestUnit runs the same suite as Test but without the "integration" build
+// tag, so the Docker-backed Postgres contract tests and the container
+// driver's specifications are excluded entirely - no containers started.
+// This is the fast, in-memory-only path for the inner dev loop; it does not
+// replace Test as the pre-commit gate (docs/adr/0028-fast-and-full-test-tiers.md).
+func TestUnit() error {
 	return run("go", "test", "-race", "-count=3", "-shuffle=on", "./...")
 }
 
-// Lint runs golangci-lint over the whole module.
+// Lint runs golangci-lint over the whole module, including files behind the
+// "integration" build tag - without --build-tags, golangci-lint would
+// silently stop analysing them.
 func Lint() error {
-	return run("go", "tool", "golangci-lint", "run", "./...")
+	return run("go", "tool", "golangci-lint", "run", "--build-tags=integration", "./...")
 }
 
 const mutateReportPath = "gremlins-report.json"
@@ -133,24 +148,59 @@ const mutateReportPath = "gremlins-report.json"
 // query params), which surfaced as LIVED mutants with no missing test to
 // write - the fix for those is regenerating from a smaller spec, not adding
 // a test that pins down someone else's generated branch.
+//
+// The "integration" build tag (--tags, see docs/adr/0028-fast-and-full-test-tiers.md)
+// is only added when the diff actually touches a path that needs Docker to
+// verify - internal/adapters/postgres or specifications/container. --integration
+// itself stays on unconditionally regardless: it's what makes gremlins run
+// go test against the whole module per mutant rather than just the mutated
+// file's own package, which is what lets domain/use-case mutations be killed
+// via the specifications package at all (see above). Without the build tag,
+// those go test reruns simply don't compile the Docker-backed test files in,
+// so an unrelated diff (domain, use-case, HTTP handler) never starts a
+// container while still being checked against every other in-memory
+// specification.
 func Mutate() error {
 	if err := exec.Command("git", "diff", "--quiet", "HEAD", "--", "*.go").Run(); err == nil {
 		return nil
 	}
 
-	if err := run("go", "tool", "gremlins", "unleash",
+	args := []string{
+		"unleash",
 		"--diff=HEAD",
 		"--coverpkg=./...",
 		"--timeout-coefficient=30",
 		"--integration",
 		"--exclude-files=.*\\.gen\\.go$",
 		"-o", mutateReportPath,
-		".",
-	); err != nil {
+	}
+	if needsIntegrationTag() {
+		args = append(args, "--tags=integration")
+	}
+	args = append(args, ".")
+
+	if err := run("go", append([]string{"tool", "gremlins"}, args...)...); err != nil {
 		return err
 	}
 
 	return checkNoSurvivors(mutateReportPath)
+}
+
+// needsIntegrationTag reports whether the pending diff touches a path that
+// can only be verified against a real Postgres/container instance, in which
+// case gremlins needs the "integration" build tag to see those tests at all.
+func needsIntegrationTag() bool {
+	out, err := exec.Command("git", "diff", "--name-only", "HEAD", "--", "*.go").Output()
+	if err != nil {
+		return true
+	}
+
+	for _, path := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.HasPrefix(path, "internal/adapters/postgres/") || strings.HasPrefix(path, "specifications/container/") {
+			return true
+		}
+	}
+	return false
 }
 
 func checkNoSurvivors(path string) error {

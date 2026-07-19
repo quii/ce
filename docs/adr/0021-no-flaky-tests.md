@@ -10,7 +10,7 @@ enforcement: process
 
 ## Decision
 
-A test that sometimes fails for no code reason is not tolerated, ever - no retries, no `@flaky`/skip annotations, no quarantine lists. The standard test invocation is `go test -race -count=3 -shuffle=on ./...`.
+A test that sometimes fails for no code reason is not tolerated, ever - no retries, no `@flaky`/skip annotations, no quarantine lists. The standard test invocation is `go test -race -count=3 -shuffle=on ./...`, with `-tags=integration` added for the pre-commit gate that also runs the Docker-backed suites (`docs/adr/0028-fast-and-full-test-tiers.md`) - `-race`/`-count`/`-shuffle` apply identically either way.
 
 ## Rationale
 
