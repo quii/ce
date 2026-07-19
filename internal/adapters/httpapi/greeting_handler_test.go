@@ -31,7 +31,7 @@ func TestGreetingHandler_GetGreeting(t *testing.T) {
 
 func TestGreetingHandler_RepeatedNameParameterIsRejected(t *testing.T) {
 	useCase := in.NewGetGreetingUseCase(memory.NewGreetingFinder())
-	handler := httpapi.NewGreetingHandler(useCase)
+	handler := httpapi.NewCompositeHandler(httpapi.NewGreetingHandler(useCase), conversationHandler(t))
 	server := httpapi.Handler(httpapi.NewStrictHandler(handler, nil))
 
 	req := httptest.NewRequest(http.MethodGet, "/greeting?name=Chris&name=Sam", nil)

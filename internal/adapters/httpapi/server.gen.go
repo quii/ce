@@ -12,13 +12,56 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 )
 
+// Conversation defines model for Conversation.
+type Conversation struct {
+	Id          string `json:"id"`
+	ResourceUrl string `json:"resourceUrl"`
+	Thread      Thread `json:"thread"`
+}
+
+// Error defines model for Error.
+type Error struct {
+	Message string `json:"message"`
+}
+
 // Greeting defines model for Greeting.
 type Greeting struct {
 	Greeting string `json:"greeting"`
+}
+
+// Message defines model for Message.
+type Message struct {
+	Author   string    `json:"author"`
+	PostedAt time.Time `json:"postedAt"`
+	Text     string    `json:"text"`
+}
+
+// StartConversationRequest All five fields are required by CE's domain rules, but none are marked required at the schema level - a missing key and a present-but-empty value are meaningfully different (see the "start a conversation" story), and the distinction is only preserved if the generated type can tell "absent" from "zero value", i.e. every field stays optional/pointer here.
+type StartConversationRequest struct {
+	Author      *string   `json:"author,omitempty"`
+	Message     *string   `json:"message,omitempty"`
+	Recipients  *[]string `json:"recipients,omitempty"`
+	ResourceUrl *string   `json:"resourceUrl,omitempty"`
+	ThreadTitle *string   `json:"threadTitle,omitempty"`
+}
+
+// Thread defines model for Thread.
+type Thread struct {
+	Id         string    `json:"id"`
+	Messages   []Message `json:"messages"`
+	Recipients []string  `json:"recipients"`
+	Title      string    `json:"title"`
+}
+
+// GetConversationParams defines parameters for GetConversation.
+type GetConversationParams struct {
+	// After A sequence number from a prior write's Location header - the response is 202 until the projection's checkpoint reaches it
+	After *int64 `form:"after,omitempty" json:"after,omitempty"`
 }
 
 // GetGreetingParams defines parameters for GetGreeting.
@@ -26,8 +69,17 @@ type GetGreetingParams struct {
 	Name *string `form:"name,omitempty" json:"name,omitempty"`
 }
 
+// StartConversationJSONRequestBody defines body for StartConversation for application/json ContentType.
+type StartConversationJSONRequestBody = StartConversationRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Start a conversation about a resource by posting an opening message
+	// (POST /conversations)
+	StartConversation(w http.ResponseWriter, r *http.Request)
+	// Get a conversation, optionally waiting for a specific write to be reflected
+	// (GET /conversations/{id})
+	GetConversation(w http.ResponseWriter, r *http.Request, id string, params GetConversationParams)
 	// Get a greeting, optionally personalized with a name
 	// (GET /greeting)
 	GetGreeting(w http.ResponseWriter, r *http.Request, params GetGreetingParams)
@@ -41,6 +93,62 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// StartConversation operation middleware
+func (siw *ServerInterfaceWrapper) StartConversation(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartConversation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConversation operation middleware
+func (siw *ServerInterfaceWrapper) GetConversation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetConversationParams
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConversation(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetGreeting operation middleware
 func (siw *ServerInterfaceWrapper) GetGreeting(w http.ResponseWriter, r *http.Request) {
@@ -195,9 +303,94 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations", wrapper.StartConversation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations/{id}", wrapper.GetConversation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/greeting", wrapper.GetGreeting)
 
 	return m
+}
+
+type StartConversationRequestObject struct {
+	Body *StartConversationJSONRequestBody
+}
+
+type StartConversationResponseObject interface {
+	VisitStartConversationResponse(w http.ResponseWriter) error
+}
+
+type StartConversation202ResponseHeaders struct {
+	Location *string
+}
+
+type StartConversation202Response struct {
+	Headers StartConversation202ResponseHeaders
+}
+
+func (response StartConversation202Response) VisitStartConversationResponse(w http.ResponseWriter) error {
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(202)
+	return nil
+}
+
+type StartConversation400JSONResponse Error
+
+func (response StartConversation400JSONResponse) VisitStartConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversationRequestObject struct {
+	Id     string `json:"id"`
+	Params GetConversationParams
+}
+
+type GetConversationResponseObject interface {
+	VisitGetConversationResponse(w http.ResponseWriter) error
+}
+
+type GetConversation200JSONResponse Conversation
+
+func (response GetConversation200JSONResponse) VisitGetConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConversation202Response struct {
+}
+
+func (response GetConversation202Response) VisitGetConversationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type GetConversation404JSONResponse Error
+
+func (response GetConversation404JSONResponse) VisitGetConversationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type GetGreetingRequestObject struct {
@@ -224,6 +417,12 @@ func (response GetGreeting200JSONResponse) VisitGetGreetingResponse(w http.Respo
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Start a conversation about a resource by posting an opening message
+	// (POST /conversations)
+	StartConversation(ctx context.Context, request StartConversationRequestObject) (StartConversationResponseObject, error)
+	// Get a conversation, optionally waiting for a specific write to be reflected
+	// (GET /conversations/{id})
+	GetConversation(ctx context.Context, request GetConversationRequestObject) (GetConversationResponseObject, error)
 	// Get a greeting, optionally personalized with a name
 	// (GET /greeting)
 	GetGreeting(ctx context.Context, request GetGreetingRequestObject) (GetGreetingResponseObject, error)
@@ -256,6 +455,64 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// StartConversation operation middleware
+func (sh *strictHandler) StartConversation(w http.ResponseWriter, r *http.Request) {
+	var request StartConversationRequestObject
+
+	var body StartConversationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartConversation(ctx, request.(StartConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartConversationResponseObject); ok {
+		if err := validResponse.VisitStartConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetConversation operation middleware
+func (sh *strictHandler) GetConversation(w http.ResponseWriter, r *http.Request, id string, params GetConversationParams) {
+	var request GetConversationRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetConversation(ctx, request.(GetConversationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetConversation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetConversationResponseObject); ok {
+		if err := validResponse.VisitGetConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetGreeting operation middleware

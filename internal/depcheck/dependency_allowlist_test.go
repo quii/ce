@@ -17,6 +17,8 @@ import (
 var allowlist = map[string]bool{
 	"github.com/testcontainers/testcontainers-go": true,
 	"github.com/oapi-codegen/runtime":             true,
+	"github.com/jackc/pgx/v5":                     true,
+	"github.com/pressly/goose/v3":                 true,
 }
 
 func TestNoUnapprovedDirectDependencies(t *testing.T) {

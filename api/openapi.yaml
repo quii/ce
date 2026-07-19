@@ -20,6 +20,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Greeting'
+  /conversations:
+    post:
+      operationId: startConversation
+      summary: Start a conversation about a resource by posting an opening message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartConversationRequest'
+      responses:
+        '202':
+          description: Accepted - the write is durable but not necessarily reflected in the read model yet
+          headers:
+            Location:
+              description: The new conversation, with an after= cursor for polling until the projection has caught up
+              schema:
+                type: string
+        '400':
+          description: The request is missing a required field, or violates a recipients rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      summary: Get a conversation, optionally waiting for a specific write to be reflected
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: after
+          in: query
+          required: false
+          description: A sequence number from a prior write's Location header - the response is 202 until the projection's checkpoint reaches it
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: The conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '202':
+          description: Accepted - the projection has not yet caught up to the requested sequence
+        '404':
+          description: No conversation with this id in the current projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
     Greeting:
@@ -29,3 +85,79 @@ components:
       properties:
         greeting:
           type: string
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    StartConversationRequest:
+      type: object
+      description: >-
+        All five fields are required by CE's domain rules, but none are
+        marked required at the schema level - a missing key and a
+        present-but-empty value are meaningfully different (see the
+        "start a conversation" story), and the distinction is only
+        preserved if the generated type can tell "absent" from "zero
+        value", i.e. every field stays optional/pointer here.
+      properties:
+        resourceUrl:
+          type: string
+        threadTitle:
+          type: string
+        author:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+    Conversation:
+      type: object
+      required:
+        - id
+        - resourceUrl
+        - thread
+      properties:
+        id:
+          type: string
+        resourceUrl:
+          type: string
+        thread:
+          $ref: '#/components/schemas/Thread'
+    Thread:
+      type: object
+      required:
+        - id
+        - title
+        - recipients
+        - messages
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    Message:
+      type: object
+      required:
+        - author
+        - text
+        - postedAt
+      properties:
+        author:
+          type: string
+        text:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
