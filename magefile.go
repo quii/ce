@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func run(name string, args ...string) error {
@@ -16,11 +17,51 @@ func run(name string, args ...string) error {
 	return cmd.Run()
 }
 
+// portOwner returns a human-readable description of whatever process is
+// already listening on port, or "" if the port is free (including if
+// lsof itself isn't available - this check degrades to a no-op rather
+// than blocking Up/Run on environments without it).
+//
+// This exists because a stale process left over from an earlier `go
+// run`/`mage run` can win a port silently: Docker/OrbStack don't
+// reliably surface that a port is already held by a native process as a
+// bind error, so `mage up` can report success while every request
+// actually reaches the wrong, long-dead process over the interface
+// Docker didn't grab (observed first-hand - a `go run ./cmd/api` from
+// two days earlier had been quietly answering on :8080 over IPv6 the
+// entire time).
+func portOwner(port int) string {
+	out, err := exec.Command("lsof", "-nP", fmt.Sprintf("-iTCP:%d", port), "-sTCP:LISTEN", "-t").Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return ""
+	}
+
+	pid := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	cmdOut, err := exec.Command("ps", "-p", pid, "-o", "command=").Output()
+	if err != nil {
+		return "pid " + pid
+	}
+	return fmt.Sprintf("pid %s (%s)", pid, strings.TrimSpace(string(cmdOut)))
+}
+
+func checkPortsFree(ports ...int) error {
+	for _, port := range ports {
+		if owner := portOwner(port); owner != "" {
+			return fmt.Errorf("port %d is already in use by %s - stop it first, then retry", port, owner)
+		}
+	}
+	return nil
+}
+
 // Run runs the given app (api, relay, or web) via go run, inheriting the
 // current environment - e.g. `go tool mage run api`.
 func Run(service string) error {
 	switch service {
-	case "api", "relay", "web":
+	case "api", "web":
+		if err := checkPortsFree(8080); err != nil {
+			return err
+		}
+	case "relay":
 	default:
 		return fmt.Errorf("unknown service %q - want one of: api, relay, web", service)
 	}
@@ -35,6 +76,10 @@ func Run(service string) error {
 
 // Up builds and starts all services via docker compose.
 func Up() error {
+	if err := checkPortsFree(8080, 8090, 5432); err != nil {
+		return err
+	}
+
 	cmd := exec.Command("docker", "compose", "up", "--build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
