@@ -53,6 +53,75 @@ func checkPortsFree(ports ...int) error {
 	return nil
 }
 
+var containerRuntimeSignatures = []string{"docker", "orbstack", "containerd"}
+
+func looksLikeContainerRuntime(owner string) bool {
+	lower := strings.ToLower(owner)
+	for _, sig := range containerRuntimeSignatures {
+		if strings.Contains(lower, sig) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkPortsFreeOrComposeOwned is checkPortsFree, except a port is also
+// accepted (not just an empty owner) when docker compose reports owning it
+// AND the process actually holding it is recognisably a container runtime
+// - not merely "docker compose ps says so": if compose's reported state
+// and the real OS-level listener ever disagree (a container stuck
+// restarting, stale compose state), this still reports a conflict rather
+// than silently trusting compose, which is exactly the failure mode
+// portOwner exists to catch (see its doc comment).
+func checkPortsFreeOrComposeOwned(owned map[int]bool, ports ...int) error {
+	for _, port := range ports {
+		owner := portOwner(port)
+		if owner == "" {
+			continue
+		}
+		if owned[port] && looksLikeContainerRuntime(owner) {
+			continue
+		}
+		return fmt.Errorf("port %d is already in use by %s - stop it first, then retry", port, owner)
+	}
+	return nil
+}
+
+// composeOwnedPorts returns the ports already published by this project's
+// own running docker compose containers (docker-compose.yml), or an empty
+// set if compose isn't running or `docker compose ps` fails - degrading to
+// "nothing owned" leaves checkPortsFreeOrComposeOwned's stray-process check
+// as the fallback rather than blocking Up on environments without Docker.
+func composeOwnedPorts() map[int]bool {
+	owned := make(map[int]bool)
+
+	out, err := exec.Command("docker", "compose", "ps", "--format", "json").Output()
+	if err != nil {
+		return owned
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		var container struct {
+			Publishers []struct {
+				PublishedPort int `json:"PublishedPort"`
+			} `json:"Publishers"`
+		}
+		if err := json.Unmarshal([]byte(line), &container); err != nil {
+			continue
+		}
+		for _, p := range container.Publishers {
+			if p.PublishedPort != 0 {
+				owned[p.PublishedPort] = true
+			}
+		}
+	}
+
+	return owned
+}
+
 // Run runs the given app (api, relay, or web) via go run, inheriting the
 // current environment - e.g. `go tool mage run api`.
 func Run(service string) error {
@@ -74,9 +143,12 @@ func Run(service string) error {
 	return cmd.Run()
 }
 
-// Up builds and starts all services via docker compose.
+// Up builds and starts all services via docker compose. Re-running Up
+// while this project's own compose stack is already up is the normal,
+// idempotent case - docker compose reconciles it - so only ports held by
+// something other than our own containers are treated as a conflict.
 func Up() error {
-	if err := checkPortsFree(8080, 8090, 5432); err != nil {
+	if err := checkPortsFreeOrComposeOwned(composeOwnedPorts(), 8080, 8090, 5432); err != nil {
 		return err
 	}
 
