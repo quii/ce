@@ -40,3 +40,13 @@ var (
 	ErrConversationNotFound  = errors.New("conversation not found")
 	ErrProjectionNotCaughtUp = errors.New("projection has not caught up to the requested sequence")
 )
+
+// ErrThreadNotFound and ErrReplyForbidden are rules 2-3 of "reply to a
+// thread": a thread that doesn't exist (or doesn't belong to the given
+// conversation) is not found, and a reply from someone outside the
+// thread's frozen participant set is forbidden - never an HTTP status
+// code, see docs/adr/0011-domain-errors-stay-domain-errors.md.
+var (
+	ErrThreadNotFound = errors.New("thread not found")
+	ErrReplyForbidden = errors.New("author is not a participant of this thread")
+)

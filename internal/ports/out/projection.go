@@ -11,7 +11,7 @@ import (
 // checkpoint together, so a reader comparing Checkpoint against a
 // requested sequence never sees one move without the other.
 type Projection interface {
-	Apply(ctx context.Context, event domain.ConversationStarted, seq domain.Sequence) error
+	Apply(ctx context.Context, event domain.Event, seq domain.Sequence) error
 	Get(ctx context.Context, id domain.ConversationID) (domain.ConversationView, error)
 	Checkpoint(ctx context.Context) (domain.Sequence, error)
 }

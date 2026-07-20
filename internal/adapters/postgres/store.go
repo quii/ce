@@ -9,6 +9,11 @@ import (
 	"github.com/quii/ce/internal/domain"
 )
 
+const (
+	eventTypeConversationStarted = "ConversationStarted"
+	eventTypeReplyPosted         = "ReplyPosted"
+)
+
 // Store is the Postgres-backed out.EventStore, out.Outbox and
 // out.Projection - one struct backing all three, since they share a
 // single pool/schema, mirroring internal/adapters/memory/event_store.go's
@@ -42,17 +47,33 @@ func toTimestamptz(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
-func toEnqueueOutboxEntryParams(seq domain.Sequence, event domain.ConversationStarted) EnqueueOutboxEntryParams {
-	return EnqueueOutboxEntryParams{
+func toNullableText(s string) pgtype.Text {
+	return pgtype.Text{String: s, Valid: true}
+}
+
+func toEnqueueConversationStartedOutboxEntryParams(seq domain.Sequence, event domain.ConversationStarted) EnqueueConversationStartedOutboxEntryParams {
+	return EnqueueConversationStartedOutboxEntryParams{
 		Sequence:       int64(seq),
 		ConversationID: string(event.ConversationID),
 		ThreadID:       string(event.ThreadID),
 		MessageID:      string(event.MessageID),
-		Creator:        string(event.Creator),
-		ResourceUrl:    string(event.ResourceURL),
-		ThreadTitle:    string(event.ThreadTitle),
+		Creator:        toNullableText(string(event.Creator)),
+		ResourceUrl:    toNullableText(string(event.ResourceURL)),
+		ThreadTitle:    toNullableText(string(event.ThreadTitle)),
 		Author:         string(event.Author),
 		Recipients:     recipientsToStrings(event.Recipients),
+		MessageText:    string(event.MessageText),
+		OccurredAt:     toTimestamptz(event.OccurredAt),
+	}
+}
+
+func toEnqueueReplyPostedOutboxEntryParams(seq domain.Sequence, event domain.ReplyPosted) EnqueueReplyPostedOutboxEntryParams {
+	return EnqueueReplyPostedOutboxEntryParams{
+		Sequence:       int64(seq),
+		ConversationID: string(event.ConversationID),
+		ThreadID:       string(event.ThreadID),
+		MessageID:      string(event.MessageID),
+		Author:         string(event.Author),
 		MessageText:    string(event.MessageText),
 		OccurredAt:     toTimestamptz(event.OccurredAt),
 	}

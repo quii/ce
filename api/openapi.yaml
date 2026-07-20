@@ -76,6 +76,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /conversations/{conversationId}/threads/{threadId}/messages:
+    post:
+      operationId: replyToThread
+      summary: Reply to an existing thread
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplyToThreadRequest'
+      responses:
+        '202':
+          description: Accepted - the write is durable but not necessarily reflected in the read model yet
+          headers:
+            Location:
+              description: The conversation this reply belongs to, with an after= cursor for polling until the projection has caught up
+              schema:
+                type: string
+        '400':
+          description: The request is missing a required field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: The author is not a participant of this thread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: The conversation doesn't exist, or the thread doesn't exist under it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
     Greeting:
@@ -161,3 +208,16 @@ components:
         postedAt:
           type: string
           format: date-time
+    ReplyToThreadRequest:
+      type: object
+      description: >-
+        Both fields are required by CE's domain rules, but neither is
+        marked required at the schema level - the same posture as
+        StartConversationRequest: a missing key and a present-but-empty
+        value are meaningfully different (see "reply to a thread" rule 1),
+        so both fields stay optional/pointer here.
+      properties:
+        author:
+          type: string
+        text:
+          type: string

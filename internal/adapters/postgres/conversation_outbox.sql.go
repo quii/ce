@@ -11,31 +11,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const enqueueOutboxEntry = `-- name: EnqueueOutboxEntry :exec
+const enqueueConversationStartedOutboxEntry = `-- name: EnqueueConversationStartedOutboxEntry :exec
 INSERT INTO conversation_outbox (
-    sequence, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
+    sequence, event_type, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, 'ConversationStarted', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 ON CONFLICT (sequence) DO NOTHING
 `
 
-type EnqueueOutboxEntryParams struct {
+type EnqueueConversationStartedOutboxEntryParams struct {
 	Sequence       int64
 	ConversationID string
 	ThreadID       string
 	MessageID      string
-	Creator        string
-	ResourceUrl    string
-	ThreadTitle    string
+	Creator        pgtype.Text
+	ResourceUrl    pgtype.Text
+	ThreadTitle    pgtype.Text
 	Author         string
 	Recipients     []string
 	MessageText    string
 	OccurredAt     pgtype.Timestamptz
 }
 
-func (q *Queries) EnqueueOutboxEntry(ctx context.Context, arg EnqueueOutboxEntryParams) error {
-	_, err := q.db.Exec(ctx, enqueueOutboxEntry,
+func (q *Queries) EnqueueConversationStartedOutboxEntry(ctx context.Context, arg EnqueueConversationStartedOutboxEntryParams) error {
+	_, err := q.db.Exec(ctx, enqueueConversationStartedOutboxEntry,
 		arg.Sequence,
 		arg.ConversationID,
 		arg.ThreadID,
@@ -51,8 +51,40 @@ func (q *Queries) EnqueueOutboxEntry(ctx context.Context, arg EnqueueOutboxEntry
 	return err
 }
 
+const enqueueReplyPostedOutboxEntry = `-- name: EnqueueReplyPostedOutboxEntry :exec
+INSERT INTO conversation_outbox (
+    sequence, event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
+) VALUES (
+    $1, 'ReplyPosted', $2, $3, $4, $5, $6, $7
+)
+ON CONFLICT (sequence) DO NOTHING
+`
+
+type EnqueueReplyPostedOutboxEntryParams struct {
+	Sequence       int64
+	ConversationID string
+	ThreadID       string
+	MessageID      string
+	Author         string
+	MessageText    string
+	OccurredAt     pgtype.Timestamptz
+}
+
+func (q *Queries) EnqueueReplyPostedOutboxEntry(ctx context.Context, arg EnqueueReplyPostedOutboxEntryParams) error {
+	_, err := q.db.Exec(ctx, enqueueReplyPostedOutboxEntry,
+		arg.Sequence,
+		arg.ConversationID,
+		arg.ThreadID,
+		arg.MessageID,
+		arg.Author,
+		arg.MessageText,
+		arg.OccurredAt,
+	)
+	return err
+}
+
 const listPendingOutboxEntries = `-- name: ListPendingOutboxEntries :many
-SELECT sequence, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
+SELECT sequence, event_type, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
 FROM conversation_outbox
 WHERE done_at IS NULL
 ORDER BY sequence
@@ -60,12 +92,13 @@ ORDER BY sequence
 
 type ListPendingOutboxEntriesRow struct {
 	Sequence       int64
+	EventType      string
 	ConversationID string
 	ThreadID       string
 	MessageID      string
-	Creator        string
-	ResourceUrl    string
-	ThreadTitle    string
+	Creator        pgtype.Text
+	ResourceUrl    pgtype.Text
+	ThreadTitle    pgtype.Text
 	Author         string
 	Recipients     []string
 	MessageText    string
@@ -83,6 +116,7 @@ func (q *Queries) ListPendingOutboxEntries(ctx context.Context) ([]ListPendingOu
 		var i ListPendingOutboxEntriesRow
 		if err := rows.Scan(
 			&i.Sequence,
+			&i.EventType,
 			&i.ConversationID,
 			&i.ThreadID,
 			&i.MessageID,

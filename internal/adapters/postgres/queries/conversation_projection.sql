@@ -1,22 +1,34 @@
--- name: ApplyConversationProjection :exec
+-- name: ApplyConversationStartedProjection :exec
 INSERT INTO conversation_projection (
-    id, resource_url, thread_id, thread_title, recipients, message_author, message_text, message_posted_at
+    id, resource_url, thread_id, thread_title, thread_author, recipients
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6
 )
 ON CONFLICT (id) DO UPDATE SET
     resource_url = EXCLUDED.resource_url,
     thread_id = EXCLUDED.thread_id,
     thread_title = EXCLUDED.thread_title,
-    recipients = EXCLUDED.recipients,
-    message_author = EXCLUDED.message_author,
-    message_text = EXCLUDED.message_text,
-    message_posted_at = EXCLUDED.message_posted_at;
+    thread_author = EXCLUDED.thread_author,
+    recipients = EXCLUDED.recipients;
+
+-- name: AppendConversationProjectionMessage :exec
+INSERT INTO conversation_projection_messages (
+    conversation_id, sequence, author, message_text, posted_at
+) VALUES (
+    $1, $2, $3, $4, $5
+)
+ON CONFLICT (conversation_id, sequence) DO NOTHING;
 
 -- name: GetConversationProjection :one
-SELECT id, resource_url, thread_id, thread_title, recipients, message_author, message_text, message_posted_at
+SELECT id, resource_url, thread_id, thread_title, thread_author, recipients
 FROM conversation_projection
 WHERE id = $1;
+
+-- name: ListConversationProjectionMessages :many
+SELECT conversation_id, sequence, author, message_text, posted_at
+FROM conversation_projection_messages
+WHERE conversation_id = $1
+ORDER BY sequence;
 
 -- name: SetProjectionCheckpoint :exec
 UPDATE projection_checkpoint SET sequence = $1 WHERE sequence < $1;

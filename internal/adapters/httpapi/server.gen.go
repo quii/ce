@@ -41,6 +41,12 @@ type Message struct {
 	Text     string    `json:"text"`
 }
 
+// ReplyToThreadRequest Both fields are required by CE's domain rules, but neither is marked required at the schema level - the same posture as StartConversationRequest: a missing key and a present-but-empty value are meaningfully different (see "reply to a thread" rule 1), so both fields stay optional/pointer here.
+type ReplyToThreadRequest struct {
+	Author *string `json:"author,omitempty"`
+	Text   *string `json:"text,omitempty"`
+}
+
 // StartConversationRequest All five fields are required by CE's domain rules, but none are marked required at the schema level - a missing key and a present-but-empty value are meaningfully different (see the "start a conversation" story), and the distinction is only preserved if the generated type can tell "absent" from "zero value", i.e. every field stays optional/pointer here.
 type StartConversationRequest struct {
 	Author      *string   `json:"author,omitempty"`
@@ -72,11 +78,17 @@ type GetGreetingParams struct {
 // StartConversationJSONRequestBody defines body for StartConversation for application/json ContentType.
 type StartConversationJSONRequestBody = StartConversationRequest
 
+// ReplyToThreadJSONRequestBody defines body for ReplyToThread for application/json ContentType.
+type ReplyToThreadJSONRequestBody = ReplyToThreadRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Start a conversation about a resource by posting an opening message
 	// (POST /conversations)
 	StartConversation(w http.ResponseWriter, r *http.Request)
+	// Reply to an existing thread
+	// (POST /conversations/{conversationId}/threads/{threadId}/messages)
+	ReplyToThread(w http.ResponseWriter, r *http.Request, conversationId string, threadId string)
 	// Get a conversation, optionally waiting for a specific write to be reflected
 	// (GET /conversations/{id})
 	GetConversation(w http.ResponseWriter, r *http.Request, id string, params GetConversationParams)
@@ -99,6 +111,41 @@ func (siw *ServerInterfaceWrapper) StartConversation(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartConversation(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplyToThread operation middleware
+func (siw *ServerInterfaceWrapper) ReplyToThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "threadId" -------------
+	var threadId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "threadId", r.PathValue("threadId"), &threadId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "threadId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplyToThread(w, r, conversationId, threadId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -304,6 +351,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations", wrapper.StartConversation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations/{conversationId}/threads/{threadId}/messages", wrapper.ReplyToThread)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations/{id}", wrapper.GetConversation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/greeting", wrapper.GetGreeting)
 
@@ -344,6 +392,74 @@ func (response StartConversation400JSONResponse) VisitStartConversationResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplyToThreadRequestObject struct {
+	ConversationId string `json:"conversationId"`
+	ThreadId       string `json:"threadId"`
+	Body           *ReplyToThreadJSONRequestBody
+}
+
+type ReplyToThreadResponseObject interface {
+	VisitReplyToThreadResponse(w http.ResponseWriter) error
+}
+
+type ReplyToThread202ResponseHeaders struct {
+	Location *string
+}
+
+type ReplyToThread202Response struct {
+	Headers ReplyToThread202ResponseHeaders
+}
+
+func (response ReplyToThread202Response) VisitReplyToThreadResponse(w http.ResponseWriter) error {
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(202)
+	return nil
+}
+
+type ReplyToThread400JSONResponse Error
+
+func (response ReplyToThread400JSONResponse) VisitReplyToThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplyToThread403JSONResponse Error
+
+func (response ReplyToThread403JSONResponse) VisitReplyToThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplyToThread404JSONResponse Error
+
+func (response ReplyToThread404JSONResponse) VisitReplyToThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -420,6 +536,9 @@ type StrictServerInterface interface {
 	// Start a conversation about a resource by posting an opening message
 	// (POST /conversations)
 	StartConversation(ctx context.Context, request StartConversationRequestObject) (StartConversationResponseObject, error)
+	// Reply to an existing thread
+	// (POST /conversations/{conversationId}/threads/{threadId}/messages)
+	ReplyToThread(ctx context.Context, request ReplyToThreadRequestObject) (ReplyToThreadResponseObject, error)
 	// Get a conversation, optionally waiting for a specific write to be reflected
 	// (GET /conversations/{id})
 	GetConversation(ctx context.Context, request GetConversationRequestObject) (GetConversationResponseObject, error)
@@ -481,6 +600,40 @@ func (sh *strictHandler) StartConversation(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartConversationResponseObject); ok {
 		if err := validResponse.VisitStartConversationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplyToThread operation middleware
+func (sh *strictHandler) ReplyToThread(w http.ResponseWriter, r *http.Request, conversationId string, threadId string) {
+	var request ReplyToThreadRequestObject
+
+	request.ConversationId = conversationId
+	request.ThreadId = threadId
+
+	var body ReplyToThreadJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplyToThread(ctx, request.(ReplyToThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplyToThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplyToThreadResponseObject); ok {
+		if err := validResponse.VisitReplyToThreadResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

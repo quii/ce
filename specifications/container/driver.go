@@ -84,6 +84,39 @@ func (d *Driver) StartConversation(ctx context.Context, cmd in.StartConversation
 	return in.StartConversationResult{ConversationID: id, Sequence: seq}, nil
 }
 
+func (d *Driver) ReplyToThread(ctx context.Context, cmd in.ReplyToThreadCommand) (in.ReplyToThreadResult, error) {
+	resp, err := d.client.ReplyToThreadWithResponse(ctx, cmd.ConversationID, cmd.ThreadID, apiclient.ReplyToThreadJSONRequestBody{
+		Author: cmd.Author,
+		Text:   cmd.Message,
+	})
+	if err != nil {
+		return in.ReplyToThreadResult{}, err
+	}
+
+	switch resp.StatusCode() {
+	case http.StatusBadRequest:
+		message := "request rejected"
+		if resp.JSON400 != nil {
+			message = resp.JSON400.Message
+		}
+		return in.ReplyToThreadResult{}, domain.NewValidationError(message)
+	case http.StatusForbidden:
+		return in.ReplyToThreadResult{}, domain.ErrReplyForbidden
+	case http.StatusNotFound:
+		return in.ReplyToThreadResult{}, domain.ErrConversationNotFound
+	case http.StatusAccepted:
+	default:
+		return in.ReplyToThreadResult{}, fmt.Errorf("unexpected status code %d", resp.StatusCode())
+	}
+
+	id, seq, err := parseConversationLocation(resp.HTTPResponse.Header.Get("Location"))
+	if err != nil {
+		return in.ReplyToThreadResult{}, err
+	}
+
+	return in.ReplyToThreadResult{ConversationID: id, Sequence: seq}, nil
+}
+
 func (d *Driver) GetConversation(ctx context.Context, cmd in.GetConversationCommand) (domain.ConversationView, error) {
 	var params apiclient.GetConversationParams
 	if cmd.After != nil {

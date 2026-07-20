@@ -10,7 +10,7 @@ import (
 // still waiting for the relay to apply it to a projection.
 type OutboxEntry struct {
 	Sequence domain.Sequence
-	Event    domain.ConversationStarted
+	Event    domain.Event
 }
 
 // Outbox is the transactional outbox the relay drains - see
@@ -18,7 +18,7 @@ type OutboxEntry struct {
 // the same transaction for a real adapter, so a projection can never miss
 // an event the store already has.
 type Outbox interface {
-	Enqueue(ctx context.Context, seq domain.Sequence, event domain.ConversationStarted) error
+	Enqueue(ctx context.Context, seq domain.Sequence, event domain.Event) error
 	Pending(ctx context.Context) ([]OutboxEntry, error)
 	MarkDone(ctx context.Context, seq domain.Sequence) error
 }

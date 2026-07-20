@@ -11,49 +11,71 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const applyConversationProjection = `-- name: ApplyConversationProjection :exec
-INSERT INTO conversation_projection (
-    id, resource_url, thread_id, thread_title, recipients, message_author, message_text, message_posted_at
+const appendConversationProjectionMessage = `-- name: AppendConversationProjectionMessage :exec
+INSERT INTO conversation_projection_messages (
+    conversation_id, sequence, author, message_text, posted_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5
+)
+ON CONFLICT (conversation_id, sequence) DO NOTHING
+`
+
+type AppendConversationProjectionMessageParams struct {
+	ConversationID string
+	Sequence       int64
+	Author         string
+	MessageText    string
+	PostedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) AppendConversationProjectionMessage(ctx context.Context, arg AppendConversationProjectionMessageParams) error {
+	_, err := q.db.Exec(ctx, appendConversationProjectionMessage,
+		arg.ConversationID,
+		arg.Sequence,
+		arg.Author,
+		arg.MessageText,
+		arg.PostedAt,
+	)
+	return err
+}
+
+const applyConversationStartedProjection = `-- name: ApplyConversationStartedProjection :exec
+INSERT INTO conversation_projection (
+    id, resource_url, thread_id, thread_title, thread_author, recipients
+) VALUES (
+    $1, $2, $3, $4, $5, $6
 )
 ON CONFLICT (id) DO UPDATE SET
     resource_url = EXCLUDED.resource_url,
     thread_id = EXCLUDED.thread_id,
     thread_title = EXCLUDED.thread_title,
-    recipients = EXCLUDED.recipients,
-    message_author = EXCLUDED.message_author,
-    message_text = EXCLUDED.message_text,
-    message_posted_at = EXCLUDED.message_posted_at
+    thread_author = EXCLUDED.thread_author,
+    recipients = EXCLUDED.recipients
 `
 
-type ApplyConversationProjectionParams struct {
-	ID              string
-	ResourceUrl     string
-	ThreadID        string
-	ThreadTitle     string
-	Recipients      []string
-	MessageAuthor   string
-	MessageText     string
-	MessagePostedAt pgtype.Timestamptz
+type ApplyConversationStartedProjectionParams struct {
+	ID           string
+	ResourceUrl  string
+	ThreadID     string
+	ThreadTitle  string
+	ThreadAuthor string
+	Recipients   []string
 }
 
-func (q *Queries) ApplyConversationProjection(ctx context.Context, arg ApplyConversationProjectionParams) error {
-	_, err := q.db.Exec(ctx, applyConversationProjection,
+func (q *Queries) ApplyConversationStartedProjection(ctx context.Context, arg ApplyConversationStartedProjectionParams) error {
+	_, err := q.db.Exec(ctx, applyConversationStartedProjection,
 		arg.ID,
 		arg.ResourceUrl,
 		arg.ThreadID,
 		arg.ThreadTitle,
+		arg.ThreadAuthor,
 		arg.Recipients,
-		arg.MessageAuthor,
-		arg.MessageText,
-		arg.MessagePostedAt,
 	)
 	return err
 }
 
 const getConversationProjection = `-- name: GetConversationProjection :one
-SELECT id, resource_url, thread_id, thread_title, recipients, message_author, message_text, message_posted_at
+SELECT id, resource_url, thread_id, thread_title, thread_author, recipients
 FROM conversation_projection
 WHERE id = $1
 `
@@ -66,10 +88,8 @@ func (q *Queries) GetConversationProjection(ctx context.Context, id string) (Con
 		&i.ResourceUrl,
 		&i.ThreadID,
 		&i.ThreadTitle,
+		&i.ThreadAuthor,
 		&i.Recipients,
-		&i.MessageAuthor,
-		&i.MessageText,
-		&i.MessagePostedAt,
 	)
 	return i, err
 }
@@ -83,6 +103,39 @@ func (q *Queries) GetProjectionCheckpoint(ctx context.Context) (int64, error) {
 	var sequence int64
 	err := row.Scan(&sequence)
 	return sequence, err
+}
+
+const listConversationProjectionMessages = `-- name: ListConversationProjectionMessages :many
+SELECT conversation_id, sequence, author, message_text, posted_at
+FROM conversation_projection_messages
+WHERE conversation_id = $1
+ORDER BY sequence
+`
+
+func (q *Queries) ListConversationProjectionMessages(ctx context.Context, conversationID string) ([]ConversationProjectionMessage, error) {
+	rows, err := q.db.Query(ctx, listConversationProjectionMessages, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ConversationProjectionMessage
+	for rows.Next() {
+		var i ConversationProjectionMessage
+		if err := rows.Scan(
+			&i.ConversationID,
+			&i.Sequence,
+			&i.Author,
+			&i.MessageText,
+			&i.PostedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setProjectionCheckpoint = `-- name: SetProjectionCheckpoint :exec

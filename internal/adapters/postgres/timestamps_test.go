@@ -55,8 +55,12 @@ func TestStore_TimestampsAreUTC(t *testing.T) {
 	if len(pending) != 1 {
 		t.Fatalf("Pending() = %#v, want exactly one entry", pending)
 	}
-	if loc := pending[0].Event.OccurredAt.Location(); loc != time.UTC {
-		t.Errorf("Pending()[0].Event.OccurredAt.Location() = %v, want %v", loc, time.UTC)
+	got, ok := pending[0].Event.(domain.ConversationStarted)
+	if !ok {
+		t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationStarted", pending[0].Event)
+	}
+	if loc := got.OccurredAt.Location(); loc != time.UTC {
+		t.Errorf("Pending()[0].Event.(domain.ConversationStarted).OccurredAt.Location() = %v, want %v", loc, time.UTC)
 	}
 
 	if err := store.Apply(ctx, event, seq); err != nil {

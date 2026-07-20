@@ -41,6 +41,12 @@ func TestStartConversation_Projection(t *testing.T) {
 	specifications.ConversationProjectionSpecification(t, driver)
 }
 
+func TestReplyToThread(t *testing.T) {
+	driver := container.New(startTopology(t).apiBaseURL)
+
+	specifications.ReplyToThreadSpecification(t, driver)
+}
+
 func TestAPIDocs(t *testing.T) {
 	baseURL := startTopology(t).apiBaseURL
 

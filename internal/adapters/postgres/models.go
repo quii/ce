@@ -13,13 +13,14 @@ type ConversationEvent struct {
 	ConversationID string
 	ThreadID       string
 	MessageID      string
-	Creator        string
-	ResourceUrl    string
-	ThreadTitle    string
+	Creator        pgtype.Text
+	ResourceUrl    pgtype.Text
+	ThreadTitle    pgtype.Text
 	Author         string
 	Recipients     []string
 	MessageText    string
 	OccurredAt     pgtype.Timestamptz
+	EventType      string
 }
 
 type ConversationOutbox struct {
@@ -27,25 +28,32 @@ type ConversationOutbox struct {
 	ConversationID string
 	ThreadID       string
 	MessageID      string
-	Creator        string
-	ResourceUrl    string
-	ThreadTitle    string
+	Creator        pgtype.Text
+	ResourceUrl    pgtype.Text
+	ThreadTitle    pgtype.Text
 	Author         string
 	Recipients     []string
 	MessageText    string
 	OccurredAt     pgtype.Timestamptz
 	DoneAt         pgtype.Timestamptz
+	EventType      string
 }
 
 type ConversationProjection struct {
-	ID              string
-	ResourceUrl     string
-	ThreadID        string
-	ThreadTitle     string
-	Recipients      []string
-	MessageAuthor   string
-	MessageText     string
-	MessagePostedAt pgtype.Timestamptz
+	ID           string
+	ResourceUrl  string
+	ThreadID     string
+	ThreadTitle  string
+	ThreadAuthor string
+	Recipients   []string
+}
+
+type ConversationProjectionMessage struct {
+	ConversationID string
+	Sequence       int64
+	Author         string
+	MessageText    string
+	PostedAt       pgtype.Timestamptz
 }
 
 type ProjectionCheckpoint struct {

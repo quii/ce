@@ -38,6 +38,24 @@ func EventStore(t *testing.T, newStore func() out.EventStore) {
 			t.Errorf("second Append's sequence = %d, want %d (one more than the first's sequence %d)", second, first+1, first)
 		}
 	})
+
+	t.Run("appending a reply after a conversation-started event assigns the next sequence", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		first, err := store.Append(ctx, sampleEvent("conversation-1"))
+		if err != nil {
+			t.Fatalf("Append(ConversationStarted) returned an unexpected error: %v", err)
+		}
+
+		second, err := store.Append(ctx, sampleReplyEvent("conversation-1", "thread-1"))
+		if err != nil {
+			t.Fatalf("Append(ReplyPosted) returned an unexpected error: %v", err)
+		}
+		if second != first+1 {
+			t.Errorf("Append(ReplyPosted)'s sequence = %d, want %d (one more than the ConversationStarted's sequence %d)", second, first+1, first)
+		}
+	})
 }
 
 // EventStoreOutbox is the combination out.EventStore and out.Outbox that
@@ -88,5 +106,16 @@ func sampleEvent(conversationID string) domain.ConversationStarted {
 		Recipients:     domain.Recipients{"user-2", "user-3"},
 		MessageText:    domain.MessageText("Where is my order?"),
 		OccurredAt:     time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+	}
+}
+
+func sampleReplyEvent(conversationID, threadID string) domain.ReplyPosted {
+	return domain.ReplyPosted{
+		ConversationID: domain.ConversationID(conversationID),
+		ThreadID:       domain.ThreadID(threadID),
+		MessageID:      domain.MessageID("message-2"),
+		Author:         domain.ParticipantID("user-2"),
+		MessageText:    domain.MessageText("Looking into it"),
+		OccurredAt:     time.Date(2024, 1, 2, 3, 5, 0, 0, time.UTC),
 	}
 }

@@ -15,8 +15,17 @@ type ConversationView struct {
 type ThreadView struct {
 	ID         ThreadID
 	Title      ThreadTitle
+	Author     ParticipantID
 	Recipients Recipients
 	Messages   []MessageView
+}
+
+// HasParticipant reports whether id is one of the thread's participants -
+// its original author or one of its recipients, exactly the set it was
+// created with (rule 3 of "reply to a thread"; participation changes are
+// deferred to a future story).
+func (t ThreadView) HasParticipant(id ParticipantID) bool {
+	return t.Author == id || t.Recipients.Contains(id)
 }
 
 type MessageView struct {

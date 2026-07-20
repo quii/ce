@@ -18,15 +18,15 @@ import (
 // same contract test, per docs/adr/0009-contract-tests.md.
 type EventStore struct {
 	mu      sync.Mutex
-	events  []domain.ConversationStarted
-	pending map[domain.Sequence]domain.ConversationStarted
+	events  []domain.Event
+	pending map[domain.Sequence]domain.Event
 }
 
 func NewEventStore() *EventStore {
-	return &EventStore{pending: make(map[domain.Sequence]domain.ConversationStarted)}
+	return &EventStore{pending: make(map[domain.Sequence]domain.Event)}
 }
 
-func (s *EventStore) Append(_ context.Context, event domain.ConversationStarted) (domain.Sequence, error) {
+func (s *EventStore) Append(_ context.Context, event domain.Event) (domain.Sequence, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -37,7 +37,7 @@ func (s *EventStore) Append(_ context.Context, event domain.ConversationStarted)
 	return seq, nil
 }
 
-func (s *EventStore) Enqueue(_ context.Context, seq domain.Sequence, event domain.ConversationStarted) error {
+func (s *EventStore) Enqueue(_ context.Context, seq domain.Sequence, event domain.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

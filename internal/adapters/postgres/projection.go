@@ -14,7 +14,7 @@ import (
 // transaction, so a reader comparing Checkpoint against a requested
 // sequence never observes one move without the other - see
 // out.Projection.
-func (s *Store) Apply(ctx context.Context, event domain.ConversationStarted, seq domain.Sequence) error {
+func (s *Store) Apply(ctx context.Context, event domain.Event, seq domain.Sequence) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("could not begin projection transaction: %w", err)
@@ -23,17 +23,17 @@ func (s *Store) Apply(ctx context.Context, event domain.ConversationStarted, seq
 
 	q := s.queries.WithTx(tx)
 
-	if err := q.ApplyConversationProjection(ctx, ApplyConversationProjectionParams{
-		ID:              string(event.ConversationID),
-		ResourceUrl:     string(event.ResourceURL),
-		ThreadID:        string(event.ThreadID),
-		ThreadTitle:     string(event.ThreadTitle),
-		Recipients:      recipientsToStrings(event.Recipients),
-		MessageAuthor:   string(event.Author),
-		MessageText:     string(event.MessageText),
-		MessagePostedAt: toTimestamptz(event.OccurredAt),
-	}); err != nil {
-		return fmt.Errorf("could not apply conversation projection: %w", err)
+	switch e := event.(type) {
+	case domain.ConversationStarted:
+		if err := applyConversationStarted(ctx, q, e, seq); err != nil {
+			return err
+		}
+	case domain.ReplyPosted:
+		if err := applyReplyPosted(ctx, q, e, seq); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("cannot apply event of unrecognized type %T", event)
 	}
 
 	if err := q.SetProjectionCheckpoint(ctx, int64(seq)); err != nil {
@@ -42,6 +42,45 @@ func (s *Store) Apply(ctx context.Context, event domain.ConversationStarted, seq
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("could not commit projection transaction: %w", err)
+	}
+
+	return nil
+}
+
+func applyConversationStarted(ctx context.Context, q *Queries, event domain.ConversationStarted, seq domain.Sequence) error {
+	if err := q.ApplyConversationStartedProjection(ctx, ApplyConversationStartedProjectionParams{
+		ID:           string(event.ConversationID),
+		ResourceUrl:  string(event.ResourceURL),
+		ThreadID:     string(event.ThreadID),
+		ThreadTitle:  string(event.ThreadTitle),
+		ThreadAuthor: string(event.Author),
+		Recipients:   recipientsToStrings(event.Recipients),
+	}); err != nil {
+		return fmt.Errorf("could not apply conversation started projection: %w", err)
+	}
+
+	if err := q.AppendConversationProjectionMessage(ctx, AppendConversationProjectionMessageParams{
+		ConversationID: string(event.ConversationID),
+		Sequence:       int64(seq),
+		Author:         string(event.Author),
+		MessageText:    string(event.MessageText),
+		PostedAt:       toTimestamptz(event.OccurredAt),
+	}); err != nil {
+		return fmt.Errorf("could not append opening message to projection: %w", err)
+	}
+
+	return nil
+}
+
+func applyReplyPosted(ctx context.Context, q *Queries, event domain.ReplyPosted, seq domain.Sequence) error {
+	if err := q.AppendConversationProjectionMessage(ctx, AppendConversationProjectionMessageParams{
+		ConversationID: string(event.ConversationID),
+		Sequence:       int64(seq),
+		Author:         string(event.Author),
+		MessageText:    string(event.MessageText),
+		PostedAt:       toTimestamptz(event.OccurredAt),
+	}); err != nil {
+		return fmt.Errorf("could not append reply to projection: %w", err)
 	}
 
 	return nil
@@ -56,20 +95,29 @@ func (s *Store) Get(ctx context.Context, id domain.ConversationID) (domain.Conve
 		return domain.ConversationView{}, fmt.Errorf("could not get conversation projection %q: %w", id, err)
 	}
 
+	messageRows, err := s.queries.ListConversationProjectionMessages(ctx, string(id))
+	if err != nil {
+		return domain.ConversationView{}, fmt.Errorf("could not list conversation projection messages %q: %w", id, err)
+	}
+
+	messages := make([]domain.MessageView, len(messageRows))
+	for i, m := range messageRows {
+		messages[i] = domain.MessageView{
+			Author:   domain.ParticipantID(m.Author),
+			Text:     domain.MessageText(m.MessageText),
+			PostedAt: m.PostedAt.Time,
+		}
+	}
+
 	return domain.ConversationView{
 		ID:          domain.ConversationID(row.ID),
 		ResourceURL: domain.ResourceURL(row.ResourceUrl),
 		Thread: domain.ThreadView{
 			ID:         domain.ThreadID(row.ThreadID),
 			Title:      domain.ThreadTitle(row.ThreadTitle),
+			Author:     domain.ParticipantID(row.ThreadAuthor),
 			Recipients: stringsToRecipients(row.Recipients),
-			Messages: []domain.MessageView{
-				{
-					Author:   domain.ParticipantID(row.MessageAuthor),
-					Text:     domain.MessageText(row.MessageText),
-					PostedAt: row.MessagePostedAt.Time,
-				},
-			},
+			Messages:   messages,
 		},
 	}, nil
 }

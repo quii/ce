@@ -30,8 +30,12 @@ func Outbox(t *testing.T, newOutbox func() out.Outbox) {
 		if pending[0].Sequence != 1 {
 			t.Errorf("Pending()[0].Sequence = %d, want 1", pending[0].Sequence)
 		}
-		if pending[0].Event.ConversationID != event.ConversationID {
-			t.Errorf("Pending()[0].Event.ConversationID = %q, want %q", pending[0].Event.ConversationID, event.ConversationID)
+		got, ok := pending[0].Event.(domain.ConversationStarted)
+		if !ok {
+			t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationStarted", pending[0].Event)
+		}
+		if got.ConversationID != event.ConversationID {
+			t.Errorf("Pending()[0].Event.(domain.ConversationStarted).ConversationID = %q, want %q", got.ConversationID, event.ConversationID)
 		}
 
 		if err := outbox.MarkDone(ctx, 1); err != nil {
@@ -44,6 +48,34 @@ func Outbox(t *testing.T, newOutbox func() out.Outbox) {
 		}
 		if len(pending) != 0 {
 			t.Errorf("Pending() after MarkDone = %#v, want none", pending)
+		}
+	})
+
+	t.Run("an enqueued reply round-trips through Pending", func(t *testing.T) {
+		outbox := newOutbox()
+		ctx := context.Background()
+		event := sampleReplyEvent("conversation-1", "thread-1")
+
+		if err := outbox.Enqueue(ctx, 1, event); err != nil {
+			t.Fatalf("Enqueue returned an unexpected error: %v", err)
+		}
+
+		pending, err := outbox.Pending(ctx)
+		if err != nil {
+			t.Fatalf("Pending returned an unexpected error: %v", err)
+		}
+		if len(pending) != 1 {
+			t.Fatalf("Pending() = %#v, want exactly one entry", pending)
+		}
+		got, ok := pending[0].Event.(domain.ReplyPosted)
+		if !ok {
+			t.Fatalf("Pending()[0].Event = %#v, want a domain.ReplyPosted", pending[0].Event)
+		}
+		if got.ConversationID != event.ConversationID {
+			t.Errorf("Pending()[0].Event.(domain.ReplyPosted).ConversationID = %q, want %q", got.ConversationID, event.ConversationID)
+		}
+		if got.Author != event.Author {
+			t.Errorf("Pending()[0].Event.(domain.ReplyPosted).Author = %q, want %q", got.Author, event.Author)
 		}
 	})
 
