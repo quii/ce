@@ -6,6 +6,7 @@ import (
 
 	"github.com/quii/ce/internal/adapters/httpapi"
 	"github.com/quii/ce/internal/adapters/memory"
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/ports/in"
 )
 
@@ -43,13 +44,10 @@ func TestConversationHandler_StartConversation_MissingResourceURLIsRejected(t *t
 			Message:     strPtr("Where is my order?"),
 		},
 	})
-	if err != nil {
-		t.Fatalf("StartConversation returned an unexpected transport error: %v", err)
-	}
+	assert.NoErr(t, err, "StartConversation")
 
-	if _, ok := got.(httpapi.StartConversation400JSONResponse); !ok {
-		t.Errorf("StartConversation with no resourceUrl = %#v, want a StartConversation400JSONResponse", got)
-	}
+	_, ok := got.(httpapi.StartConversation400JSONResponse)
+	assert.True(t, ok, "StartConversation with no resourceUrl = %#v, want a StartConversation400JSONResponse", got)
 }
 
 func TestConversationHandler_ReplyToThread_MissingAuthorIsRejected(t *testing.T) {
@@ -62,13 +60,10 @@ func TestConversationHandler_ReplyToThread_MissingAuthorIsRejected(t *testing.T)
 			Text: strPtr("Let me know when you can"),
 		},
 	})
-	if err != nil {
-		t.Fatalf("ReplyToThread returned an unexpected transport error: %v", err)
-	}
+	assert.NoErr(t, err, "ReplyToThread")
 
-	if _, ok := got.(httpapi.ReplyToThread400JSONResponse); !ok {
-		t.Errorf("ReplyToThread with no author = %#v, want a ReplyToThread400JSONResponse", got)
-	}
+	_, ok := got.(httpapi.ReplyToThread400JSONResponse)
+	assert.True(t, ok, "ReplyToThread with no author = %#v, want a ReplyToThread400JSONResponse", got)
 }
 
 func TestConversationHandler_ReplyToThread_UnknownConversationIs404(t *testing.T) {
@@ -82,24 +77,18 @@ func TestConversationHandler_ReplyToThread_UnknownConversationIs404(t *testing.T
 			Text:   strPtr("Let me know when you can"),
 		},
 	})
-	if err != nil {
-		t.Fatalf("ReplyToThread returned an unexpected transport error: %v", err)
-	}
+	assert.NoErr(t, err, "ReplyToThread")
 
-	if _, ok := got.(httpapi.ReplyToThread404JSONResponse); !ok {
-		t.Errorf("ReplyToThread(%q) = %#v, want a ReplyToThread404JSONResponse", "does-not-exist", got)
-	}
+	_, ok := got.(httpapi.ReplyToThread404JSONResponse)
+	assert.True(t, ok, "ReplyToThread(%q) = %#v, want a ReplyToThread404JSONResponse", "does-not-exist", got)
 }
 
 func TestConversationHandler_GetConversation_UnknownIDIs404(t *testing.T) {
 	handler := conversationHandler(t)
 
 	got, err := handler.GetConversation(context.Background(), httpapi.GetConversationRequestObject{Id: "does-not-exist"})
-	if err != nil {
-		t.Fatalf("GetConversation returned an unexpected transport error: %v", err)
-	}
+	assert.NoErr(t, err, "GetConversation")
 
-	if _, ok := got.(httpapi.GetConversation404JSONResponse); !ok {
-		t.Errorf("GetConversation(%q) = %#v, want a GetConversation404JSONResponse", "does-not-exist", got)
-	}
+	_, ok := got.(httpapi.GetConversation404JSONResponse)
+	assert.True(t, ok, "GetConversation(%q) = %#v, want a GetConversation404JSONResponse", "does-not-exist", got)
 }

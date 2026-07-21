@@ -2,9 +2,9 @@ package contracttest
 
 import (
 	"context"
-	"errors"
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/out"
 )
@@ -16,21 +16,15 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		projection := newProjection()
 
 		checkpoint, err := projection.Checkpoint(context.Background())
-		if err != nil {
-			t.Fatalf("Checkpoint returned an unexpected error: %v", err)
-		}
-		if checkpoint != 0 {
-			t.Errorf("Checkpoint() before any Apply = %d, want 0", checkpoint)
-		}
+		assert.NoErr(t, err, "Checkpoint")
+		assert.Equal(t, checkpoint, domain.Sequence(0), "Checkpoint() before any Apply")
 	})
 
 	t.Run("getting an unknown conversation is ErrConversationNotFound", func(t *testing.T) {
 		projection := newProjection()
 
 		_, err := projection.Get(context.Background(), domain.ConversationID("does-not-exist"))
-		if !errors.Is(err, domain.ErrConversationNotFound) {
-			t.Errorf("Get(unknown) returned err = %v, want domain.ErrConversationNotFound", err)
-		}
+		assert.ErrorIs(t, err, domain.ErrConversationNotFound, "Get(unknown)")
 	})
 
 	t.Run("applying an event makes it readable and advances the checkpoint", func(t *testing.T) {
@@ -38,28 +32,17 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		ctx := context.Background()
 		event := sampleEvent("conversation-1")
 
-		if err := projection.Apply(ctx, event, 5); err != nil {
-			t.Fatalf("Apply returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, projection.Apply(ctx, event, 5), "Apply")
 
 		view, err := projection.Get(ctx, event.ConversationID)
-		if err != nil {
-			t.Fatalf("Get returned an unexpected error: %v", err)
-		}
-		if view.ResourceURL != event.ResourceURL {
-			t.Errorf("Get().ResourceURL = %q, want %q", view.ResourceURL, event.ResourceURL)
-		}
-		if len(view.Thread.Messages) != 1 || view.Thread.Messages[0].Author != event.Author {
-			t.Errorf("Get().Thread.Messages = %#v, want one message from %q", view.Thread.Messages, event.Author)
-		}
+		assert.NoErr(t, err, "Get")
+		assert.Equal(t, view.ResourceURL, event.ResourceURL, "Get().ResourceURL")
+		assert.Len(t, view.Thread.Messages, 1, "Get().Thread.Messages")
+		assert.Equal(t, view.Thread.Messages[0].Author, event.Author, "Get().Thread.Messages[0].Author")
 
 		checkpoint, err := projection.Checkpoint(ctx)
-		if err != nil {
-			t.Fatalf("Checkpoint returned an unexpected error: %v", err)
-		}
-		if checkpoint != 5 {
-			t.Errorf("Checkpoint() after Apply(seq=5) = %d, want 5", checkpoint)
-		}
+		assert.NoErr(t, err, "Checkpoint")
+		assert.Equal(t, checkpoint, domain.Sequence(5), "Checkpoint() after Apply(seq=5)")
 	})
 
 	t.Run("applying a reply appends a message without disturbing the thread's title or recipients", func(t *testing.T) {
@@ -67,41 +50,21 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		ctx := context.Background()
 		started := sampleEvent("conversation-1")
 
-		if err := projection.Apply(ctx, started, 1); err != nil {
-			t.Fatalf("Apply(ConversationStarted) returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, projection.Apply(ctx, started, 1), "Apply(ConversationStarted)")
 
 		reply := sampleReplyEvent("conversation-1", string(started.ThreadID))
-		if err := projection.Apply(ctx, reply, 2); err != nil {
-			t.Fatalf("Apply(ReplyPosted) returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, projection.Apply(ctx, reply, 2), "Apply(ReplyPosted)")
 
 		view, err := projection.Get(ctx, started.ConversationID)
-		if err != nil {
-			t.Fatalf("Get returned an unexpected error: %v", err)
-		}
-		if view.Thread.Title != started.ThreadTitle {
-			t.Errorf("Get().Thread.Title = %q, want %q (unchanged by the reply)", view.Thread.Title, started.ThreadTitle)
-		}
-		if len(view.Thread.Recipients) != len(started.Recipients) {
-			t.Errorf("Get().Thread.Recipients = %v, want %v (unchanged by the reply)", view.Thread.Recipients, started.Recipients)
-		}
-		if len(view.Thread.Messages) != 2 {
-			t.Fatalf("Get().Thread.Messages = %#v, want the opening message plus the reply", view.Thread.Messages)
-		}
-		if view.Thread.Messages[0].Author != started.Author {
-			t.Errorf("Get().Thread.Messages[0].Author = %q, want the opening author %q", view.Thread.Messages[0].Author, started.Author)
-		}
-		if view.Thread.Messages[1].Author != reply.Author {
-			t.Errorf("Get().Thread.Messages[1].Author = %q, want the replying author %q", view.Thread.Messages[1].Author, reply.Author)
-		}
+		assert.NoErr(t, err, "Get")
+		assert.Equal(t, view.Thread.Title, started.ThreadTitle, "Get().Thread.Title (unchanged by the reply)")
+		assert.Equal(t, view.Thread.Recipients, started.Recipients, "Get().Thread.Recipients (unchanged by the reply)")
+		assert.Len(t, view.Thread.Messages, 2, "Get().Thread.Messages (the opening message plus the reply)")
+		assert.Equal(t, view.Thread.Messages[0].Author, started.Author, "Get().Thread.Messages[0].Author (the opening author)")
+		assert.Equal(t, view.Thread.Messages[1].Author, reply.Author, "Get().Thread.Messages[1].Author (the replying author)")
 
 		checkpoint, err := projection.Checkpoint(ctx)
-		if err != nil {
-			t.Fatalf("Checkpoint returned an unexpected error: %v", err)
-		}
-		if checkpoint != 2 {
-			t.Errorf("Checkpoint() after applying two events = %d, want 2", checkpoint)
-		}
+		assert.NoErr(t, err, "Checkpoint")
+		assert.Equal(t, checkpoint, domain.Sequence(2), "Checkpoint() after applying two events")
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
@@ -41,8 +42,8 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 			Message:     strPtr("Where is my order?"),
 		})
 
-		assertResourceURL(t, view, "https://example.com/orders/123")
-		assertThreadTitle(t, view, "Order query")
+		assert.Equal(t, string(view.ResourceURL), "https://example.com/orders/123", "ResourceURL")
+		assert.Equal(t, string(view.Thread.Title), "Order query", "Thread.Title")
 		assertRecipients(t, view, []string{"user-2", "user-3"})
 		assertMessages(t, view, "user-1", "Where is my order?")
 	})
@@ -56,7 +57,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 			Message:     strPtr(""),
 		})
 
-		assertThreadTitle(t, view, "")
+		assert.Equal(t, string(view.Thread.Title), "", "Thread.Title")
 		assertMessages(t, view, "user-1", "")
 	})
 
@@ -81,7 +82,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 			Message:     strPtr("Where is my order?"),
 		})
 
-		assertResourceURL(t, view, "https://example.com/orders/123")
+		assert.Equal(t, string(view.ResourceURL), "https://example.com/orders/123", "ResourceURL")
 	})
 }
 
@@ -90,13 +91,9 @@ func startAndCatchUp(t *testing.T, driver ConversationProjectionDriver, cmd in.S
 	ctx := context.Background()
 
 	started, err := driver.StartConversation(ctx, cmd)
-	if err != nil {
-		t.Fatalf("StartConversation(%+v) returned an unexpected error: %v", cmd, err)
-	}
+	assert.NoErr(t, err, "StartConversation(%+v)", cmd)
 
-	if err := driver.Drain(ctx); err != nil {
-		t.Fatalf("Drain returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, driver.Drain(ctx), "Drain")
 
 	view := waitForProjection(t, driver, string(started.ConversationID), int64(started.Sequence))
 
@@ -143,48 +140,27 @@ type httpConversationView struct {
 	domain.ConversationView
 }
 
-func assertResourceURL(t *testing.T, view httpConversationView, want string) {
-	t.Helper()
-	if string(view.ResourceURL) != want {
-		t.Errorf("ResourceURL = %q, want %q", view.ResourceURL, want)
-	}
-}
-
-func assertThreadTitle(t *testing.T, view httpConversationView, want string) {
-	t.Helper()
-	if string(view.Thread.Title) != want {
-		t.Errorf("Thread.Title = %q, want %q", view.Thread.Title, want)
-	}
-}
-
+// assertRecipients checks membership rather than positional equality -
+// domain.Recipients is a set (docs/domain rule: duplicates are rejected
+// at construction, docs/adr - internal/domain/conversation.go's
+// NewRecipients), so two recipient lists with the same members in a
+// different order are the same value as far as this story's rules go.
 func assertRecipients(t *testing.T, view httpConversationView, want []string) {
 	t.Helper()
 
-	if len(view.Thread.Recipients) != len(want) {
-		t.Fatalf("Thread.Recipients = %v, want %v", view.Thread.Recipients, want)
-	}
-	for i, id := range want {
-		if string(view.Thread.Recipients[i]) != id {
-			t.Errorf("Thread.Recipients[%d] = %q, want %q", i, view.Thread.Recipients[i], id)
-		}
+	assert.Len(t, view.Thread.Recipients, len(want), "Thread.Recipients")
+	for _, id := range want {
+		assert.Contains(t, view.Thread.Recipients, domain.ParticipantID(id), "Thread.Recipients")
 	}
 }
 
 func assertMessages(t *testing.T, view httpConversationView, wantAuthor, wantText string) {
 	t.Helper()
 
-	if len(view.Thread.Messages) != 1 {
-		t.Fatalf("Thread.Messages = %v, want exactly one message", view.Thread.Messages)
-	}
+	assert.Len(t, view.Thread.Messages, 1, "Thread.Messages")
 
 	got := view.Thread.Messages[0]
-	if string(got.Author) != wantAuthor {
-		t.Errorf("Messages[0].Author = %q, want %q", got.Author, wantAuthor)
-	}
-	if string(got.Text) != wantText {
-		t.Errorf("Messages[0].Text = %q, want %q", got.Text, wantText)
-	}
-	if got.PostedAt.IsZero() {
-		t.Errorf("Messages[0].PostedAt is zero, want a real timestamp")
-	}
+	assert.Equal(t, string(got.Author), wantAuthor, "Messages[0].Author")
+	assert.Equal(t, string(got.Text), wantText, "Messages[0].Text")
+	assert.False(t, got.PostedAt.IsZero(), "Messages[0].PostedAt is zero, want a real timestamp")
 }

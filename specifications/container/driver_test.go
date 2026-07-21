@@ -15,6 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/specifications"
 	"github.com/quii/ce/specifications/container"
 )
@@ -52,16 +53,12 @@ func TestAPIDocs(t *testing.T) {
 
 	t.Run("serves the OpenAPI spec", func(t *testing.T) {
 		body := get(t, baseURL+"/openapi.yaml")
-		if want := "openapi:"; !strings.Contains(body, want) {
-			t.Errorf("response from /openapi.yaml does not contain %q:\n%s", want, body)
-		}
+		assert.True(t, strings.Contains(body, "openapi:"), "response from /openapi.yaml does not contain %q:\n%s", "openapi:", body)
 	})
 
 	t.Run("serves the docs UI", func(t *testing.T) {
 		body := get(t, baseURL+"/docs")
-		if want := "/openapi.yaml"; !strings.Contains(body, want) {
-			t.Errorf("response from /docs does not reference %q:\n%s", want, body)
-		}
+		assert.True(t, strings.Contains(body, "/openapi.yaml"), "response from /docs does not reference %q:\n%s", "/openapi.yaml", body)
 	})
 }
 
@@ -69,19 +66,13 @@ func get(t *testing.T, url string) string {
 	t.Helper()
 
 	resp, err := http.Get(url) //nolint:gosec,noctx // test-only request to a URL we just built from a locally started container
-	if err != nil {
-		t.Fatalf("GET %s failed: %v", url, err)
-	}
+	assert.NoErr(t, err, "GET %s", url)
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET %s status = %d, want %d", url, resp.StatusCode, http.StatusOK)
-	}
+	assert.Equal(t, resp.StatusCode, http.StatusOK, "GET %s status", url)
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("could not read response body from %s: %v", url, err)
-	}
+	assert.NoErr(t, err, "read response body from %s", url)
 
 	return string(body)
 }
@@ -103,9 +94,7 @@ func startTopology(t *testing.T) topology {
 	ctx := context.Background()
 
 	net, err := network.New(ctx)
-	if err != nil {
-		t.Fatalf("failed to create docker network: %v", err)
-	}
+	assert.NoErr(t, err, "create docker network")
 	t.Cleanup(func() {
 		if err := net.Remove(ctx); err != nil {
 			t.Logf("failed to remove docker network: %v", err)
@@ -171,13 +160,9 @@ func startService(t *testing.T, networkName, service string, exposeHTTP bool, wa
 	}
 
 	host, err := c.Host(ctx)
-	if err != nil {
-		t.Fatalf("failed to get %s container host: %v", service, err)
-	}
+	assert.NoErr(t, err, "get %s container host", service)
 	port, err := c.MappedPort(ctx, "8080")
-	if err != nil {
-		t.Fatalf("failed to get %s mapped port: %v", service, err)
-	}
+	assert.NoErr(t, err, "get %s mapped port", service)
 
 	return fmt.Sprintf("http://%s:%s", host, port.Port())
 }
@@ -190,9 +175,7 @@ func startContainer(t *testing.T, req testcontainers.ContainerRequest) testconta
 		ContainerRequest: req,
 		Started:          true,
 	})
-	if err != nil {
-		t.Fatalf("failed to start container (image %q, dockerfile %q): %v", req.Image, req.Dockerfile, err)
-	}
+	assert.NoErr(t, err, "start container (image %q, dockerfile %q)", req.Image, req.Dockerfile)
 	t.Cleanup(func() {
 		if err := c.Terminate(ctx); err != nil {
 			t.Logf("failed to terminate container: %v", err)

@@ -2,9 +2,9 @@ package specifications
 
 import (
 	"context"
-	"errors"
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
@@ -21,9 +21,12 @@ type ThreadReplyDriver interface {
 	in.Relay
 }
 
+// wantMessage is exported-field-only so assert.Equal (cmp.Diff under the
+// hood) can compare it structurally - cmp panics on unexported fields it
+// has no way to access.
 type wantMessage struct {
-	author string
-	text   string
+	Author string
+	Text   string
 }
 
 // ReplyToThreadSpecification covers every rule of "reply to a thread":
@@ -39,14 +42,12 @@ func ReplyToThreadSpecification(t *testing.T, driver ThreadReplyDriver) {
 		conversationID, threadID := startThreadAndCatchUp(t, driver, "user-1", []string{"user-2"}, "Where is my order?")
 
 		reply, err := reply(t, driver, conversationID, threadID, "user-1", "Let me know when you can")
-		if err != nil {
-			t.Fatalf("ReplyToThread returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "ReplyToThread")
 
 		view := drainAndWait(t, driver, conversationID, reply.Sequence)
 		assertMessagesInOrder(t, httpConversationView{view}, []wantMessage{
-			{author: "user-1", text: "Where is my order?"},
-			{author: "user-1", text: "Let me know when you can"},
+			{Author: "user-1", Text: "Where is my order?"},
+			{Author: "user-1", Text: "Let me know when you can"},
 		})
 	})
 
@@ -54,14 +55,12 @@ func ReplyToThreadSpecification(t *testing.T, driver ThreadReplyDriver) {
 		conversationID, threadID := startThreadAndCatchUp(t, driver, "user-1", []string{"user-2"}, "Where is my order?")
 
 		reply, err := reply(t, driver, conversationID, threadID, "user-2", "Looking into it")
-		if err != nil {
-			t.Fatalf("ReplyToThread returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "ReplyToThread")
 
 		view := drainAndWait(t, driver, conversationID, reply.Sequence)
 		assertMessagesInOrder(t, httpConversationView{view}, []wantMessage{
-			{author: "user-1", text: "Where is my order?"},
-			{author: "user-2", text: "Looking into it"},
+			{Author: "user-1", Text: "Where is my order?"},
+			{Author: "user-2", Text: "Looking into it"},
 		})
 	})
 
@@ -69,9 +68,7 @@ func ReplyToThreadSpecification(t *testing.T, driver ThreadReplyDriver) {
 		conversationID, threadID := startThreadAndCatchUp(t, driver, "user-1", []string{"user-2"}, "Where is my order?")
 
 		_, err := reply(t, driver, conversationID, threadID, "user-3", "Can I help?")
-		if !errors.Is(err, domain.ErrReplyForbidden) {
-			t.Errorf("ReplyToThread from a non-participant returned err = %v, want domain.ErrReplyForbidden", err)
-		}
+		assert.ErrorIs(t, err, domain.ErrReplyForbidden, "ReplyToThread from a non-participant")
 	})
 
 	t.Run("replying to a nonexistent conversation is not found", func(t *testing.T) {
@@ -113,14 +110,12 @@ func ReplyToThreadSpecification(t *testing.T, driver ThreadReplyDriver) {
 		conversationID, threadID := startThreadAndCatchUp(t, driver, "user-1", []string{"user-2"}, "Where is my order?")
 
 		result, err := reply(t, driver, conversationID, threadID, "user-1", "")
-		if err != nil {
-			t.Fatalf("ReplyToThread returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "ReplyToThread")
 
 		view := drainAndWait(t, driver, conversationID, result.Sequence)
 		assertMessagesInOrder(t, httpConversationView{view}, []wantMessage{
-			{author: "user-1", text: "Where is my order?"},
-			{author: "user-1", text: ""},
+			{Author: "user-1", Text: "Where is my order?"},
+			{Author: "user-1", Text: ""},
 		})
 	})
 
@@ -137,21 +132,17 @@ func ReplyToThreadSpecification(t *testing.T, driver ThreadReplyDriver) {
 		conversationID, threadID := startThreadAndCatchUp(t, driver, "user-1", []string{"user-2"}, "Where is my order?")
 
 		first, err := reply(t, driver, conversationID, threadID, "user-1", "first reply")
-		if err != nil {
-			t.Fatalf("ReplyToThread returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "ReplyToThread")
 		drainAndWait(t, driver, conversationID, first.Sequence)
 
 		second, err := reply(t, driver, conversationID, threadID, "user-2", "second reply")
-		if err != nil {
-			t.Fatalf("ReplyToThread returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "ReplyToThread")
 		view := drainAndWait(t, driver, conversationID, second.Sequence)
 
 		assertMessagesInOrder(t, httpConversationView{view}, []wantMessage{
-			{author: "user-1", text: "Where is my order?"},
-			{author: "user-1", text: "first reply"},
-			{author: "user-2", text: "second reply"},
+			{Author: "user-1", Text: "Where is my order?"},
+			{Author: "user-1", Text: "first reply"},
+			{Author: "user-2", Text: "second reply"},
 		})
 	})
 
@@ -159,23 +150,19 @@ func ReplyToThreadSpecification(t *testing.T, driver ThreadReplyDriver) {
 		conversationID, threadID := startThreadAndCatchUp(t, driver, "user-1", []string{"user-2"}, "Where is my order?")
 
 		result, err := reply(t, driver, conversationID, threadID, "user-1", "Let me know when you can")
-		if err != nil {
-			t.Fatalf("ReplyToThread returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "ReplyToThread")
 
 		after := int64(result.Sequence)
 		_, err = driver.GetConversation(context.Background(), in.GetConversationCommand{
 			ConversationID: conversationID,
 			After:          &after,
 		})
-		if !errors.Is(err, domain.ErrProjectionNotCaughtUp) {
-			t.Errorf("GetConversation(after=%d) immediately after the reply returned err = %v, want domain.ErrProjectionNotCaughtUp", after, err)
-		}
+		assert.ErrorIs(t, err, domain.ErrProjectionNotCaughtUp, "GetConversation(after=%d) immediately after the reply", after)
 
 		view := drainAndWait(t, driver, conversationID, result.Sequence)
 		assertMessagesInOrder(t, httpConversationView{view}, []wantMessage{
-			{author: "user-1", text: "Where is my order?"},
-			{author: "user-1", text: "Let me know when you can"},
+			{Author: "user-1", Text: "Where is my order?"},
+			{Author: "user-1", Text: "Let me know when you can"},
 		})
 	})
 }

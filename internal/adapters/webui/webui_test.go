@@ -9,6 +9,7 @@ import (
 
 	"github.com/quii/ce/internal/adapters/apiclient"
 	"github.com/quii/ce/internal/adapters/webui"
+	"github.com/quii/ce/internal/assert"
 )
 
 func TestIndex_ServesAPageThatFetchesTheGreetingOnLoadAndOnEveryKeystroke(t *testing.T) {
@@ -16,12 +17,8 @@ func TestIndex_ServesAPageThatFetchesTheGreetingOnLoadAndOnEveryKeystroke(t *tes
 
 	rec := do(handler, httptest.NewRequest(http.MethodGet, "/", nil))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if got, want := rec.Header().Get("Content-Type"), "text/html; charset=utf-8"; got != want {
-		t.Errorf("Content-Type = %q, want %q", got, want)
-	}
+	assert.Equal(t, rec.Code, http.StatusOK, "status")
+	assert.Equal(t, rec.Header().Get("Content-Type"), "text/html; charset=utf-8", "Content-Type")
 
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -30,9 +27,7 @@ func TestIndex_ServesAPageThatFetchesTheGreetingOnLoadAndOnEveryKeystroke(t *tes
 		`hx-target="#greeting-hero"`,
 		`hx-trigger="keyup changed delay:300ms, load"`,
 	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("index page does not contain %q:\n%s", want, body)
-		}
+		assert.True(t, strings.Contains(body, want), "index page does not contain %q:\n%s", want, body)
 	}
 }
 
@@ -41,12 +36,8 @@ func TestGreeting_RendersTheGreetingFromTheAPI(t *testing.T) {
 
 	rec := do(handler, httptest.NewRequest(http.MethodGet, "/greeting?name=Denise", nil))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if got, want := strings.TrimSpace(rec.Body.String()), "Hello, Denise!"; got != want {
-		t.Errorf("body = %q, want %q", got, want)
-	}
+	assert.Equal(t, rec.Code, http.StatusOK, "status")
+	assert.Equal(t, strings.TrimSpace(rec.Body.String()), "Hello, Denise!", "body")
 }
 
 func TestGreeting_EscapesTheGreetingToPreventScriptInjection(t *testing.T) {
@@ -54,9 +45,8 @@ func TestGreeting_EscapesTheGreetingToPreventScriptInjection(t *testing.T) {
 
 	rec := do(handler, httptest.NewRequest(http.MethodGet, "/greeting", nil))
 
-	if got, dontWant := rec.Body.String(), "<script>"; strings.Contains(got, dontWant) {
-		t.Errorf("body contains unescaped %q:\n%s", dontWant, got)
-	}
+	got := rec.Body.String()
+	assert.False(t, strings.Contains(got, "<script>"), "body contains unescaped %q:\n%s", "<script>", got)
 }
 
 func TestGreeting_RespondsWithBadGatewayWhenTheAPIFails(t *testing.T) {
@@ -66,9 +56,7 @@ func TestGreeting_RespondsWithBadGatewayWhenTheAPIFails(t *testing.T) {
 
 	rec := do(handler, httptest.NewRequest(http.MethodGet, "/greeting", nil))
 
-	if rec.Code != http.StatusBadGateway {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadGateway)
-	}
+	assert.Equal(t, rec.Code, http.StatusBadGateway, "status")
 }
 
 func do(handler *webui.Handler, req *http.Request) *httptest.ResponseRecorder {
@@ -84,9 +72,7 @@ func newTestHandler(t *testing.T, apiHandler http.Handler) *webui.Handler {
 	t.Cleanup(apiServer.Close)
 
 	client, err := apiclient.NewClientWithResponses(apiServer.URL)
-	if err != nil {
-		t.Fatalf("could not create api client: %v", err)
-	}
+	assert.NoErr(t, err, "create api client")
 
 	return webui.NewHandler(client)
 }
@@ -96,8 +82,6 @@ func fakeGreetingAPI(t *testing.T, greeting string) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(apiclient.Greeting{Greeting: greeting}); err != nil {
-			t.Fatalf("could not encode fake greeting response: %v", err)
-		}
+		assert.NoErr(t, json.NewEncoder(w).Encode(apiclient.Greeting{Greeting: greeting}), "encode fake greeting response")
 	})
 }

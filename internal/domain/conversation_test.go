@@ -3,6 +3,7 @@ package domain_test
 import (
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 )
 
@@ -23,11 +24,7 @@ func TestStartConversation_RecordsAPlaceholderCreator(t *testing.T) {
 		Recipients:     &recipients,
 		Message:        &message,
 	})
-	if err != nil {
-		t.Fatalf("StartConversation returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, err, "StartConversation")
 
-	if event.Creator != domain.PlaceholderCreator {
-		t.Errorf("Creator = %q, want the fixed placeholder %q - rule 6 defers deriving a real caller identity to a follow-up story", event.Creator, domain.PlaceholderCreator)
-	}
+	assert.Equal(t, event.Creator, domain.PlaceholderCreator, "Creator (rule 6 defers deriving a real caller identity to a follow-up story)")
 }

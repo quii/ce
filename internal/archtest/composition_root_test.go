@@ -4,6 +4,8 @@ import (
 	"go/build"
 	"strings"
 	"testing"
+
+	"github.com/quii/ce/internal/assert"
 )
 
 func TestPortsDoNotImportAdapters(t *testing.T) {
@@ -11,9 +13,7 @@ func TestPortsDoNotImportAdapters(t *testing.T) {
 
 	for _, dir := range []string{"../ports/in", "../ports/out"} {
 		pkg, err := build.ImportDir(dir, 0)
-		if err != nil {
-			t.Fatalf("failed to inspect %s package: %v", dir, err)
-		}
+		assert.NoErr(t, err, "inspect %s package", dir)
 
 		for _, imp := range pkg.Imports {
 			if imp == adaptersPrefix || strings.HasPrefix(imp, adaptersPrefix+"/") {

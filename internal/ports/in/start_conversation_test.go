@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/quii/ce/internal/adapters/memory"
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/ports/in"
 )
 
@@ -35,7 +36,5 @@ func TestStartConversation_OnlyNeedsEventStore(t *testing.T) {
 		Recipients:  &[]string{},
 		Message:     &message,
 	})
-	if err != nil {
-		t.Fatalf("StartConversation returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, err, "StartConversation")
 }

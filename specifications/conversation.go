@@ -2,9 +2,9 @@ package specifications
 
 import (
 	"context"
-	"errors"
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
@@ -82,32 +82,24 @@ func ConversationSpecification(t *testing.T, driver ConversationDriver) {
 		ctx := context.Background()
 
 		started, err := driver.StartConversation(ctx, validCommand())
-		if err != nil {
-			t.Fatalf("StartConversation returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "StartConversation")
 
 		after := int64(started.Sequence)
 		_, err = driver.GetConversation(ctx, in.GetConversationCommand{
 			ConversationID: string(started.ConversationID),
 			After:          &after,
 		})
-		if !errors.Is(err, domain.ErrProjectionNotCaughtUp) {
-			t.Errorf("GetConversation(after=%d) immediately after the write returned err = %v, want domain.ErrProjectionNotCaughtUp", after, err)
-		}
+		assert.ErrorIs(t, err, domain.ErrProjectionNotCaughtUp, "GetConversation(after=%d) immediately after the write", after)
 	})
 
 	t.Run("a plain read reflects whatever the projection currently holds", func(t *testing.T) {
 		ctx := context.Background()
 
 		started, err := driver.StartConversation(ctx, validCommand())
-		if err != nil {
-			t.Fatalf("StartConversation returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "StartConversation")
 
 		_, err = driver.GetConversation(ctx, in.GetConversationCommand{ConversationID: string(started.ConversationID)})
-		if !errors.Is(err, domain.ErrConversationNotFound) {
-			t.Errorf("plain GetConversation before any projection has run returned err = %v, want domain.ErrConversationNotFound", err)
-		}
+		assert.ErrorIs(t, err, domain.ErrConversationNotFound, "plain GetConversation before any projection has run")
 	})
 }
 
@@ -115,11 +107,7 @@ func assertStartRejected(t *testing.T, driver ConversationDriver, cmd in.StartCo
 	t.Helper()
 
 	_, err := driver.StartConversation(context.Background(), cmd)
-
-	var validationErr domain.ValidationError
-	if !errors.As(err, &validationErr) {
-		t.Errorf("StartConversation(%+v) returned err = %v, want a domain.ValidationError", cmd, err)
-	}
+	_ = assert.ErrorAs[domain.ValidationError](t, err, "StartConversation(%+v)", cmd)
 }
 
 func strPtr(s string) *string { return &s }

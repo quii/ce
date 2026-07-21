@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/ports/in"
 )
 
@@ -39,11 +40,7 @@ func assertGreeting(t *testing.T, greeter in.Greeter, want, name string) {
 	t.Helper()
 
 	got, err := greeter.Greet(context.Background(), in.GetGreetingCommand{Name: name})
-	if err != nil {
-		t.Fatalf("Greet(%q) returned an unexpected error: %v", name, err)
-	}
+	assert.NoErr(t, err, "Greet(%q)", name)
 
-	if string(got) != want {
-		t.Errorf("Greet(%q) = %q, want %q", name, got, want)
-	}
+	assert.Equal(t, string(got), want, "Greet(%q)", name)
 }

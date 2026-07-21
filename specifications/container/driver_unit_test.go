@@ -2,11 +2,11 @@ package container_test
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 	"github.com/quii/ce/specifications/container"
@@ -30,16 +30,6 @@ func TestStartConversation_ValidationMessageComesFromResponseBody(t *testing.T) 
 	driver := container.New(server.URL)
 
 	_, err := driver.StartConversation(context.Background(), in.StartConversationCommand{})
-	if err == nil {
-		t.Fatalf("StartConversation against a stub 400 response returned no error, want a domain.ValidationError with message %q", wantMessage)
-	}
-
-	var validationErr domain.ValidationError
-	if !errors.As(err, &validationErr) {
-		t.Fatalf("StartConversation returned err = %v (%T), want it to be a domain.ValidationError", err, err)
-	}
-
-	if got := validationErr.Error(); got != wantMessage {
-		t.Errorf("ValidationError message = %q, want %q (the message from the response body's JSON400.Message, not the driver's fallback)", got, wantMessage)
-	}
+	validationErr := assert.ErrorAs[domain.ValidationError](t, err, "StartConversation against a stub 400 response")
+	assert.Equal(t, validationErr.Error(), wantMessage, "ValidationError message (should come from the response body's JSON400.Message, not the driver's fallback)")
 }

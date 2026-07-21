@@ -59,7 +59,7 @@ linters:
       # flagged in every one of these paths despite being listed there. This mechanism
       # (golangci-lint's own path/linters/text exclusion, proven working below for
       # file-length-limit) is used instead.
-      - path: "^(cmd|internal/domain|internal/adapters|internal/archtest|internal/depcheck|specifications)/"
+      - path: "^(cmd|internal/domain|internal/adapters|internal/archtest|internal/assert|internal/depcheck|specifications)/"
         linters:
           - revive
         text: "argument-limit"

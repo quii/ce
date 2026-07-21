@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/out"
 )
@@ -23,20 +24,12 @@ func EventStore(t *testing.T, newStore func() out.EventStore) {
 		ctx := context.Background()
 
 		first, err := store.Append(ctx, sampleEvent("conversation-1"))
-		if err != nil {
-			t.Fatalf("Append returned an unexpected error: %v", err)
-		}
-		if first != 1 {
-			t.Errorf("first Append's sequence = %d, want 1 - a fresh store starts from scratch", first)
-		}
+		assert.NoErr(t, err, "Append")
+		assert.Equal(t, first, domain.Sequence(1), "first Append's sequence - a fresh store starts from scratch")
 
 		second, err := store.Append(ctx, sampleEvent("conversation-2"))
-		if err != nil {
-			t.Fatalf("Append returned an unexpected error: %v", err)
-		}
-		if second != first+1 {
-			t.Errorf("second Append's sequence = %d, want %d (one more than the first's sequence %d)", second, first+1, first)
-		}
+		assert.NoErr(t, err, "Append")
+		assert.Equal(t, second, first+1, "second Append's sequence (one more than the first's sequence %d)", first)
 	})
 
 	t.Run("appending a reply after a conversation-started event assigns the next sequence", func(t *testing.T) {
@@ -44,17 +37,11 @@ func EventStore(t *testing.T, newStore func() out.EventStore) {
 		ctx := context.Background()
 
 		first, err := store.Append(ctx, sampleEvent("conversation-1"))
-		if err != nil {
-			t.Fatalf("Append(ConversationStarted) returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "Append(ConversationStarted)")
 
 		second, err := store.Append(ctx, sampleReplyEvent("conversation-1", "thread-1"))
-		if err != nil {
-			t.Fatalf("Append(ReplyPosted) returned an unexpected error: %v", err)
-		}
-		if second != first+1 {
-			t.Errorf("Append(ReplyPosted)'s sequence = %d, want %d (one more than the ConversationStarted's sequence %d)", second, first+1, first)
-		}
+		assert.NoErr(t, err, "Append(ReplyPosted)")
+		assert.Equal(t, second, first+1, "Append(ReplyPosted)'s sequence (one more than the ConversationStarted's sequence %d)", first)
 	})
 }
 
@@ -80,17 +67,12 @@ func EventStoreEnqueuesViaAppend(t *testing.T, newStore func() EventStoreOutbox)
 		ctx := context.Background()
 
 		seq, err := store.Append(ctx, sampleEvent("conversation-1"))
-		if err != nil {
-			t.Fatalf("Append returned an unexpected error: %v", err)
-		}
+		assert.NoErr(t, err, "Append")
 
 		pending, err := store.Pending(ctx)
-		if err != nil {
-			t.Fatalf("Pending returned an unexpected error: %v", err)
-		}
-		if len(pending) != 1 || pending[0].Sequence != seq {
-			t.Errorf("Pending() after Append(seq=%d) with no Enqueue call = %#v, want exactly that entry pending", seq, pending)
-		}
+		assert.NoErr(t, err, "Pending")
+		assert.Len(t, pending, 1, "Pending() after Append(seq=%d) with no Enqueue call", seq)
+		assert.Equal(t, pending[0].Sequence, seq, "Pending()[0].Sequence after Append with no Enqueue call")
 	})
 }
 

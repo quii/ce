@@ -11,6 +11,7 @@ import (
 	"github.com/quii/ce/internal/adapters/contracttest"
 	"github.com/quii/ce/internal/adapters/postgres"
 	"github.com/quii/ce/internal/adapters/postgres/postgrestest"
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/ports/out"
 )
 
@@ -24,9 +25,7 @@ func TestStore_Contract(t *testing.T) {
 	connString := postgrestest.StartContainer(t)
 
 	pool, err := postgres.NewPool(context.Background(), connString)
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
+	assert.NoErr(t, err, "connect to postgres")
 	t.Cleanup(pool.Close)
 
 	t.Run("EventStore", func(t *testing.T) {
@@ -65,7 +64,5 @@ func truncate(t *testing.T, pool *pgxpool.Pool) {
 		`TRUNCATE conversation_events, conversation_outbox, conversation_projection, conversation_projection_messages RESTART IDENTITY;
 		 UPDATE projection_checkpoint SET sequence = 0`,
 	)
-	if err != nil {
-		t.Fatalf("failed to truncate postgres tables between contract test cases: %v", err)
-	}
+	assert.NoErr(t, err, "truncate postgres tables between contract test cases")
 }

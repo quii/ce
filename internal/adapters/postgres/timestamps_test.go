@@ -9,6 +9,7 @@ import (
 
 	"github.com/quii/ce/internal/adapters/postgres"
 	"github.com/quii/ce/internal/adapters/postgres/postgrestest"
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 )
 
@@ -21,9 +22,7 @@ func TestStore_TimestampsAreUTC(t *testing.T) {
 	connString := postgrestest.StartContainer(t)
 
 	pool, err := postgres.NewPool(context.Background(), connString)
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
+	assert.NoErr(t, err, "connect to postgres")
 	t.Cleanup(pool.Close)
 
 	store := postgres.NewStore(pool)
@@ -44,33 +43,26 @@ func TestStore_TimestampsAreUTC(t *testing.T) {
 	}
 
 	seq, err := store.Append(ctx, event)
-	if err != nil {
-		t.Fatalf("Append returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, err, "Append")
 
 	pending, err := store.Pending(ctx)
-	if err != nil {
-		t.Fatalf("Pending returned an unexpected error: %v", err)
-	}
-	if len(pending) != 1 {
-		t.Fatalf("Pending() = %#v, want exactly one entry", pending)
-	}
+	assert.NoErr(t, err, "Pending")
+	assert.Len(t, pending, 1, "Pending()")
 	got, ok := pending[0].Event.(domain.ConversationStarted)
 	if !ok {
 		t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationStarted", pending[0].Event)
 	}
+	// *time.Location has unexported internals cmp.Diff can't traverse -
+	// pointer identity (what *Location == compares) is the right, and
+	// only, tool here, not assert.Equal.
 	if loc := got.OccurredAt.Location(); loc != time.UTC {
 		t.Errorf("Pending()[0].Event.(domain.ConversationStarted).OccurredAt.Location() = %v, want %v", loc, time.UTC)
 	}
 
-	if err := store.Apply(ctx, event, seq); err != nil {
-		t.Fatalf("Apply returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, store.Apply(ctx, event, seq), "Apply")
 
 	view, err := store.Get(ctx, event.ConversationID)
-	if err != nil {
-		t.Fatalf("Get returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, err, "Get")
 	if loc := view.Thread.Messages[0].PostedAt.Location(); loc != time.UTC {
 		t.Errorf("Get().Thread.Messages[0].PostedAt.Location() = %v, want %v", loc, time.UTC)
 	}

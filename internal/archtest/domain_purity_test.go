@@ -4,15 +4,15 @@ import (
 	"go/build"
 	"strings"
 	"testing"
+
+	"github.com/quii/ce/internal/assert"
 )
 
 const modulePath = "github.com/quii/ce"
 
 func TestDomainPurity(t *testing.T) {
 	pkg, err := build.ImportDir("../domain", 0)
-	if err != nil {
-		t.Fatalf("failed to inspect domain package: %v", err)
-	}
+	assert.NoErr(t, err, "inspect domain package")
 
 	for _, imp := range pkg.Imports {
 		if imp == "log" || imp == "log/slog" {

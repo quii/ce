@@ -8,6 +8,7 @@ import (
 
 	"github.com/quii/ce/internal/adapters/httpapi"
 	"github.com/quii/ce/internal/adapters/memory"
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/ports/in"
 )
 
@@ -19,14 +20,10 @@ func TestGreetingHandler_GetGreeting(t *testing.T) {
 	got, err := handler.GetGreeting(context.Background(), httpapi.GetGreetingRequestObject{
 		Params: httpapi.GetGreetingParams{Name: &name},
 	})
-	if err != nil {
-		t.Fatalf("GetGreeting(%q) returned an unexpected error: %v", name, err)
-	}
+	assert.NoErr(t, err, "GetGreeting(%q)", name)
 
 	want := httpapi.GetGreeting200JSONResponse{Greeting: "Hello, Chris!"}
-	if got != want {
-		t.Errorf("GetGreeting(%q) = %#v, want %#v", name, got, want)
-	}
+	assert.Equal[httpapi.GetGreetingResponseObject](t, got, want, "GetGreeting(%q)", name)
 }
 
 func TestGreetingHandler_RepeatedNameParameterIsRejected(t *testing.T) {
@@ -39,7 +36,5 @@ func TestGreetingHandler_RepeatedNameParameterIsRejected(t *testing.T) {
 
 	server.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
-	}
+	assert.Equal(t, rec.Code, http.StatusBadRequest, "status")
 }

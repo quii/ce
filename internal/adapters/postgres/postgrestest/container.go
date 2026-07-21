@@ -16,6 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/quii/ce/internal/adapters/postgres"
+	"github.com/quii/ce/internal/assert"
 )
 
 const (
@@ -51,27 +52,19 @@ func StartContainer(t *testing.T) string {
 		ContainerRequest: req,
 		Started:          true,
 	})
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
-	}
+	assert.NoErr(t, err, "start postgres container")
 	t.Cleanup(func() {
 		_ = container.Terminate(ctx)
 	})
 
 	host, err := container.Host(ctx)
-	if err != nil {
-		t.Fatalf("failed to get postgres container host: %v", err)
-	}
+	assert.NoErr(t, err, "get postgres container host")
 	port, err := container.MappedPort(ctx, "5432")
-	if err != nil {
-		t.Fatalf("failed to get postgres mapped port: %v", err)
-	}
+	assert.NoErr(t, err, "get postgres mapped port")
 
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, host, port.Port(), dbName)
 
-	if err := postgres.Migrate(ctx, connString); err != nil {
-		t.Fatalf("failed to migrate postgres container: %v", err)
-	}
+	assert.NoErr(t, postgres.Migrate(ctx, connString), "migrate postgres container")
 
 	return connString
 }

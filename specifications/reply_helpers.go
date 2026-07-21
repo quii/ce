@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/quii/ce/internal/assert"
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
 )
@@ -20,9 +21,7 @@ func startThreadAndCatchUp(t *testing.T, driver ThreadReplyDriver, author string
 		Recipients:  &recipients,
 		Message:     strPtr(message),
 	})
-	if err != nil {
-		t.Fatalf("StartConversation returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, err, "StartConversation")
 
 	view := drainAndWait(t, driver, string(started.ConversationID), started.Sequence)
 
@@ -44,9 +43,7 @@ func drainAndWait(t *testing.T, driver ThreadReplyDriver, conversationID string,
 	t.Helper()
 	ctx := context.Background()
 
-	if err := driver.Drain(ctx); err != nil {
-		t.Fatalf("Drain returned an unexpected error: %v", err)
-	}
+	assert.NoErr(t, driver.Drain(ctx), "Drain")
 
 	return waitForProjection(t, driver, conversationID, int64(seq))
 }
@@ -60,14 +57,8 @@ func drainAndWait(t *testing.T, driver ThreadReplyDriver, conversationID string,
 func assertReplyRejected(t *testing.T, err error, wantMessage string) {
 	t.Helper()
 
-	var validationErr domain.ValidationError
-	if !errors.As(err, &validationErr) {
-		t.Errorf("ReplyToThread returned err = %v, want a domain.ValidationError", err)
-		return
-	}
-	if validationErr.Error() != wantMessage {
-		t.Errorf("ReplyToThread returned err = %q, want message %q", validationErr.Error(), wantMessage)
-	}
+	validationErr := assert.ErrorAs[domain.ValidationError](t, err, "ReplyToThread")
+	assert.Equal(t, validationErr.Error(), wantMessage, "ReplyToThread error message")
 }
 
 // assertReplyNotFound accepts either domain.ErrConversationNotFound or
@@ -86,20 +77,13 @@ func assertReplyNotFound(t *testing.T, err error) {
 func assertMessagesInOrder(t *testing.T, view httpConversationView, want []wantMessage) {
 	t.Helper()
 
-	if len(view.Thread.Messages) != len(want) {
-		t.Fatalf("Thread.Messages = %#v, want %d messages in order: %#v", view.Thread.Messages, len(want), want)
+	got := make([]wantMessage, len(view.Thread.Messages))
+	for i, m := range view.Thread.Messages {
+		got[i] = wantMessage{Author: string(m.Author), Text: string(m.Text)}
 	}
+	assert.Equal(t, got, want, "Thread.Messages")
 
-	for i, w := range want {
-		got := view.Thread.Messages[i]
-		if string(got.Author) != w.author {
-			t.Errorf("Messages[%d].Author = %q, want %q", i, got.Author, w.author)
-		}
-		if string(got.Text) != w.text {
-			t.Errorf("Messages[%d].Text = %q, want %q", i, got.Text, w.text)
-		}
-		if got.PostedAt.IsZero() {
-			t.Errorf("Messages[%d].PostedAt is zero, want a real timestamp", i)
-		}
+	for i, m := range view.Thread.Messages {
+		assert.False(t, m.PostedAt.IsZero(), "Messages[%d].PostedAt is zero, want a real timestamp", i)
 	}
 }

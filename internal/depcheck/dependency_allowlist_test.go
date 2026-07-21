@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/quii/ce/internal/assert"
 )
 
 // Every direct (non-indirect) dependency must be flagged here before it's
@@ -19,13 +21,12 @@ var allowlist = map[string]bool{
 	"github.com/oapi-codegen/runtime":             true,
 	"github.com/jackc/pgx/v5":                     true,
 	"github.com/pressly/goose/v3":                 true,
+	"github.com/google/go-cmp":                    true,
 }
 
 func TestNoUnapprovedDirectDependencies(t *testing.T) {
 	data, err := os.ReadFile("../../go.mod")
-	if err != nil {
-		t.Fatalf("failed to read go.mod: %v", err)
-	}
+	assert.NoErr(t, err, "read go.mod")
 
 	inRequireBlock := false
 	for _, line := range strings.Split(string(data), "\n") {

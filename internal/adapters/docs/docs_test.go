@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/quii/ce/internal/adapters/docs"
+	"github.com/quii/ce/internal/assert"
 )
 
 func TestSpecHandler_ServesTheGivenSpec(t *testing.T) {
@@ -19,17 +20,11 @@ func TestSpecHandler_ServesTheGivenSpec(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if got, want := rec.Header().Get("Content-Type"), "application/yaml"; got != want {
-		t.Errorf("Content-Type = %q, want %q", got, want)
-	}
+	assert.Equal(t, rec.Header().Get("Content-Type"), "application/yaml", "Content-Type")
 
 	got, err := io.ReadAll(rec.Body)
-	if err != nil {
-		t.Fatalf("could not read response body: %v", err)
-	}
-	if string(got) != string(spec) {
-		t.Errorf("body = %q, want %q", got, spec)
-	}
+	assert.NoErr(t, err, "read response body")
+	assert.Equal(t, string(got), string(spec), "body")
 }
 
 func TestHandler_ServesAnHTMLPageReferencingTheSpec(t *testing.T) {
@@ -40,15 +35,9 @@ func TestHandler_ServesAnHTMLPageReferencingTheSpec(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if got, want := rec.Header().Get("Content-Type"), "text/html; charset=utf-8"; got != want {
-		t.Errorf("Content-Type = %q, want %q", got, want)
-	}
+	assert.Equal(t, rec.Code, http.StatusOK, "status")
+	assert.Equal(t, rec.Header().Get("Content-Type"), "text/html; charset=utf-8", "Content-Type")
 
 	got := rec.Body.String()
-	if want := "/openapi.yaml"; !strings.Contains(got, want) {
-		t.Errorf("docs page body does not reference %q:\n%s", want, got)
-	}
+	assert.True(t, strings.Contains(got, "/openapi.yaml"), "docs page body does not reference %q:\n%s", "/openapi.yaml", got)
 }
