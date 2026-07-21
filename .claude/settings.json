@@ -29,7 +29,11 @@
       "Bash(git -c core.pager=cat -C * blame*)",
       "Bash(shasum*)",
       "Bash(awk*)",
-      "Bash(head*)"
+      "Bash(head*)",
+      "Bash(go env *)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go vet *)"
     ]
   },
   "hooks": {
