@@ -15,6 +15,8 @@ If you need to scan across multiple ADRs or files, use the **`Grep`/`Glob` tools
 
 Most ADRs already tell you what to look for in their own text - many were written with "a subagent reviewing a diff checks whether..." as part of their Enforcement section. Start there.
 
+**Never run the test suite, `go build`, `go vet`, `go generate`, `docker`, or anything else that compiles, executes, or spins up infrastructure (Postgres, testcontainers, the container-driver topology) to verify your conclusions.** The mechanical gates (`go tool mage test`/`lint`/`mutate`) already ran, and passed, before any ADR checker was invoked - that's the whole point of running them first (`docs/source-control.md`). You are one of several checkers running in parallel against the same working tree; independently starting Docker-backed tests or containers here is pure redundant work at best, and at worst a real collision risk between concurrently-running checkers (port conflicts, one checker's containers interfering with another's). If you want to confirm something about generated code, diff or read the checked-in file - don't regenerate it. Reason from the diff and the ADR text; you're reviewing, not re-verifying.
+
 For each violation you find, determine whether the fix is obvious (a straightforward, unambiguous change with no real judgment call) or not. Report every finding with ReportFindings, and be explicit in your summary about which category it falls into - the calling process needs that distinction to decide whether to auto-fix or stop and ask.
 
 If the diff doesn't touch anything the ADR's decision could possibly apply to, report no findings - don't manufacture a violation to have something to say.
