@@ -18,3 +18,4 @@ Specifics live in `docs/adr/`, each with its own rationale and enforcement mecha
 - [0024 - Spec-first OpenAPI with oapi-codegen](adr/0024-openapi-spec-first-with-oapi-codegen.md)
 - [0018 - CQRS](adr/0018-cqrs.md)
 - [0019 - Event sourcing with a transactional outbox](adr/0019-event-sourcing-transactional-outbox.md) - mechanics in `docs/write-path.md`
+- [0029 - Fine-grained events, not one per use case](adr/0029-fine-grained-events.md)
