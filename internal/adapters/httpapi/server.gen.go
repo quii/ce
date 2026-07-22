@@ -58,10 +58,12 @@ type StartConversationRequest struct {
 
 // Thread defines model for Thread.
 type Thread struct {
-	Id         string    `json:"id"`
-	Messages   []Message `json:"messages"`
-	Recipients []string  `json:"recipients"`
-	Title      string    `json:"title"`
+	Id       string    `json:"id"`
+	Messages []Message `json:"messages"`
+
+	// Participants The union of the thread's original author and its recipients (see the "thread participants" story) - unordered, a set not a sequence.
+	Participants []string `json:"participants"`
+	Title        string   `json:"title"`
 }
 
 // GetConversationParams defines parameters for GetConversation.

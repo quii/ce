@@ -44,8 +44,7 @@ type ConversationProjection struct {
 	ResourceUrl  string
 	ThreadID     string
 	ThreadTitle  string
-	ThreadAuthor string
-	Recipients   []string
+	Participants []string
 }
 
 type ConversationProjectionMessage struct {

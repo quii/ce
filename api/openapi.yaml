@@ -179,17 +179,21 @@ components:
       required:
         - id
         - title
-        - recipients
+        - participants
         - messages
       properties:
         id:
           type: string
         title:
           type: string
-        recipients:
+        participants:
           type: array
           items:
             type: string
+          description: >-
+            The union of the thread's original author and its recipients
+            (see the "thread participants" story) - unordered, a set not a
+            sequence.
         messages:
           type: array
           items:

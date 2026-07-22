@@ -53,8 +53,7 @@ func applyConversationStarted(ctx context.Context, q *Queries, event domain.Conv
 		ResourceUrl:  string(event.ResourceURL),
 		ThreadID:     string(event.ThreadID),
 		ThreadTitle:  string(event.ThreadTitle),
-		ThreadAuthor: string(event.Author),
-		Recipients:   recipientsToStrings(event.Recipients),
+		Participants: recipientsToStrings(event.Participants()),
 	}); err != nil {
 		return fmt.Errorf("could not apply conversation started projection: %w", err)
 	}
@@ -113,11 +112,10 @@ func (s *Store) Get(ctx context.Context, id domain.ConversationID) (domain.Conve
 		ID:          domain.ConversationID(row.ID),
 		ResourceURL: domain.ResourceURL(row.ResourceUrl),
 		Thread: domain.ThreadView{
-			ID:         domain.ThreadID(row.ThreadID),
-			Title:      domain.ThreadTitle(row.ThreadTitle),
-			Author:     domain.ParticipantID(row.ThreadAuthor),
-			Recipients: stringsToRecipients(row.Recipients),
-			Messages:   messages,
+			ID:           domain.ThreadID(row.ThreadID),
+			Title:        domain.ThreadTitle(row.ThreadTitle),
+			Participants: stringsToRecipients(row.Participants),
+			Messages:     messages,
 		},
 	}, nil
 }

@@ -94,9 +94,9 @@ func (h *ConversationHandler) GetConversation(ctx context.Context, request GetCo
 }
 
 func toConversation(view domain.ConversationView) Conversation {
-	recipients := make([]string, len(view.Thread.Recipients))
-	for i, r := range view.Thread.Recipients {
-		recipients[i] = string(r)
+	participants := make([]string, len(view.Thread.Participants))
+	for i, p := range view.Thread.Participants {
+		participants[i] = string(p)
 	}
 
 	messages := make([]Message, len(view.Thread.Messages))
@@ -112,10 +112,10 @@ func toConversation(view domain.ConversationView) Conversation {
 		Id:          string(view.ID),
 		ResourceUrl: string(view.ResourceURL),
 		Thread: Thread{
-			Id:         string(view.Thread.ID),
-			Title:      string(view.Thread.Title),
-			Recipients: recipients,
-			Messages:   messages,
+			Id:           string(view.Thread.ID),
+			Title:        string(view.Thread.Title),
+			Participants: participants,
+			Messages:     messages,
 		},
 	}
 }

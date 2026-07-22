@@ -77,6 +77,17 @@ type ConversationStarted struct {
 	OccurredAt     time.Time
 }
 
+// Participants returns the union of the event's author and recipients -
+// the thread's participant set, computed once from this event and frozen
+// from then on (rules 1-2 of "thread participants"). It has no guaranteed
+// order: it's a set, not a sequence.
+func (e ConversationStarted) Participants() Recipients {
+	participants := make(Recipients, 0, len(e.Recipients)+1)
+	participants = append(participants, e.Author)
+	participants = append(participants, e.Recipients...)
+	return participants
+}
+
 // StartConversationParams is the raw, not-yet-validated input for starting
 // a conversation. The string/slice fields are pointers so a caller can
 // distinguish "field omitted" from "field present but empty" - see rule 2

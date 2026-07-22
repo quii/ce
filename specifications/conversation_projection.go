@@ -21,15 +21,22 @@ import (
 // trigger it on demand - so waitForProjection below is what actually
 // bridges that gap, polling the read exactly the way any HTTP client is
 // expected to (docs/write-path.md) rather than assuming Drain alone was
-// enough.
+// enough. in.ThreadReplier is here too - the "participants unchanged after
+// a reply" scenario (rule 2 of "thread participants") needs a real reply
+// to post against an already-projected thread, the same shape
+// ThreadReplyDriver already needs for its own specification.
 type ConversationProjectionDriver interface {
 	ConversationDriver
+	in.ThreadReplier
 	in.Relay
 }
 
 // ConversationProjectionSpecification covers rules 5-7 and 10 of the
-// "start a conversation" story: once the relay has caught up, a read
-// returns the full representation of what was written.
+// "start a conversation" story (now rule 1 of "thread participants" for
+// rule 10's representation shape) plus rules 2 and 4 of "thread
+// participants": once the relay has caught up, a read returns the full
+// representation of what was written, participants are the union of
+// author and recipients, and that set survives a reply unchanged.
 func ConversationProjectionSpecification(t *testing.T, driver ConversationProjectionDriver) {
 	t.Helper()
 
@@ -44,7 +51,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 
 		assert.Equal(t, string(view.ResourceURL), "https://example.com/orders/123", "ResourceURL")
 		assert.Equal(t, string(view.Thread.Title), "Order query", "Thread.Title")
-		assertRecipients(t, view, []string{"user-2", "user-3"})
+		assertParticipants(t, view, []string{"user-1", "user-2", "user-3"})
 		assertMessages(t, view, "user-1", "Where is my order?")
 	})
 
@@ -70,7 +77,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 			Message:     strPtr("Where is my order?"),
 		})
 
-		assertRecipients(t, view, []string{})
+		assertParticipants(t, view, []string{"user-1"})
 	})
 
 	t.Run("reading a conversation after the projection has caught up returns it", func(t *testing.T) {
@@ -83,6 +90,23 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 		})
 
 		assert.Equal(t, string(view.ResourceURL), "https://example.com/orders/123", "ResourceURL")
+	})
+
+	t.Run("participants are unchanged after a reply is posted", func(t *testing.T) {
+		started := startAndCatchUp(t, driver, in.StartConversationCommand{
+			ResourceURL: strPtr("https://example.com/orders/123"),
+			ThreadTitle: strPtr("Order query"),
+			Author:      strPtr("user-1"),
+			Recipients:  &[]string{"user-2"},
+			Message:     strPtr("Where is my order?"),
+		})
+
+		result, err := reply(t, driver, string(started.ID), string(started.Thread.ID), "user-2", "Looking into it")
+		assert.NoErr(t, err, "ReplyToThread")
+
+		view := drainAndWait(t, driver, string(started.ID), result.Sequence)
+
+		assertParticipants(t, httpConversationView{view}, []string{"user-1", "user-2"})
 	})
 }
 
@@ -140,17 +164,16 @@ type httpConversationView struct {
 	domain.ConversationView
 }
 
-// assertRecipients checks membership rather than positional equality -
-// domain.Recipients is a set (docs/domain rule: duplicates are rejected
-// at construction, docs/adr - internal/domain/conversation.go's
-// NewRecipients), so two recipient lists with the same members in a
+// assertParticipants checks membership rather than positional equality -
+// ThreadView.Participants has no guaranteed order (rule 4 of "thread
+// participants"), so two participant sets with the same members in a
 // different order are the same value as far as this story's rules go.
-func assertRecipients(t *testing.T, view httpConversationView, want []string) {
+func assertParticipants(t *testing.T, view httpConversationView, want []string) {
 	t.Helper()
 
-	assert.Len(t, view.Thread.Recipients, len(want), "Thread.Recipients")
+	assert.Len(t, view.Thread.Participants, len(want), "Thread.Participants")
 	for _, id := range want {
-		assert.Contains(t, view.Thread.Recipients, domain.ParticipantID(id), "Thread.Recipients")
+		assert.Contains(t, view.Thread.Participants, domain.ParticipantID(id), "Thread.Participants")
 	}
 }
 

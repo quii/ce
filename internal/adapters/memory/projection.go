@@ -42,10 +42,9 @@ func (p *Projection) applyConversationStarted(event domain.ConversationStarted) 
 		ID:          event.ConversationID,
 		ResourceURL: event.ResourceURL,
 		Thread: domain.ThreadView{
-			ID:         event.ThreadID,
-			Title:      event.ThreadTitle,
-			Author:     event.Author,
-			Recipients: event.Recipients,
+			ID:           event.ThreadID,
+			Title:        event.ThreadTitle,
+			Participants: event.Participants(),
 			Messages: []domain.MessageView{
 				{
 					Author:   event.Author,

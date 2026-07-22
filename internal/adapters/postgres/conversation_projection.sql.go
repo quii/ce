@@ -41,16 +41,15 @@ func (q *Queries) AppendConversationProjectionMessage(ctx context.Context, arg A
 
 const applyConversationStartedProjection = `-- name: ApplyConversationStartedProjection :exec
 INSERT INTO conversation_projection (
-    id, resource_url, thread_id, thread_title, thread_author, recipients
+    id, resource_url, thread_id, thread_title, participants
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5
 )
 ON CONFLICT (id) DO UPDATE SET
     resource_url = EXCLUDED.resource_url,
     thread_id = EXCLUDED.thread_id,
     thread_title = EXCLUDED.thread_title,
-    thread_author = EXCLUDED.thread_author,
-    recipients = EXCLUDED.recipients
+    participants = EXCLUDED.participants
 `
 
 type ApplyConversationStartedProjectionParams struct {
@@ -58,8 +57,7 @@ type ApplyConversationStartedProjectionParams struct {
 	ResourceUrl  string
 	ThreadID     string
 	ThreadTitle  string
-	ThreadAuthor string
-	Recipients   []string
+	Participants []string
 }
 
 func (q *Queries) ApplyConversationStartedProjection(ctx context.Context, arg ApplyConversationStartedProjectionParams) error {
@@ -68,14 +66,13 @@ func (q *Queries) ApplyConversationStartedProjection(ctx context.Context, arg Ap
 		arg.ResourceUrl,
 		arg.ThreadID,
 		arg.ThreadTitle,
-		arg.ThreadAuthor,
-		arg.Recipients,
+		arg.Participants,
 	)
 	return err
 }
 
 const getConversationProjection = `-- name: GetConversationProjection :one
-SELECT id, resource_url, thread_id, thread_title, thread_author, recipients
+SELECT id, resource_url, thread_id, thread_title, participants
 FROM conversation_projection
 WHERE id = $1
 `
@@ -88,8 +85,7 @@ func (q *Queries) GetConversationProjection(ctx context.Context, id string) (Con
 		&i.ResourceUrl,
 		&i.ThreadID,
 		&i.ThreadTitle,
-		&i.ThreadAuthor,
-		&i.Recipients,
+		&i.Participants,
 	)
 	return i, err
 }

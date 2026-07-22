@@ -12,20 +12,24 @@ type ConversationView struct {
 	Thread      ThreadView
 }
 
+// ThreadView's Participants is the union of the thread's original author
+// and its recipients, computed once when ConversationStarted is applied to
+// build the projection and frozen from then on - a reply never changes it
+// (rules 1-2 of "thread participants"). It has no guaranteed order (rule
+// 4): it's a set, not a sequence.
 type ThreadView struct {
-	ID         ThreadID
-	Title      ThreadTitle
-	Author     ParticipantID
-	Recipients Recipients
-	Messages   []MessageView
+	ID           ThreadID
+	Title        ThreadTitle
+	Participants Recipients
+	Messages     []MessageView
 }
 
 // HasParticipant reports whether id is one of the thread's participants -
-// its original author or one of its recipients, exactly the set it was
-// created with (rule 3 of "reply to a thread"; participation changes are
+// exactly the frozen set it was created with (rule 3 of "reply to a
+// thread"/rule 5 of "thread participants"; participation changes are
 // deferred to a future story).
 func (t ThreadView) HasParticipant(id ParticipantID) bool {
-	return t.Author == id || t.Recipients.Contains(id)
+	return t.Participants.Contains(id)
 }
 
 type MessageView struct {

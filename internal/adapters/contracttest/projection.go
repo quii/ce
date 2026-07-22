@@ -45,7 +45,7 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		assert.Equal(t, checkpoint, domain.Sequence(5), "Checkpoint() after Apply(seq=5)")
 	})
 
-	t.Run("applying a reply appends a message without disturbing the thread's title or recipients", func(t *testing.T) {
+	t.Run("applying a reply appends a message without disturbing the thread's title or participants", func(t *testing.T) {
 		projection := newProjection()
 		ctx := context.Background()
 		started := sampleEvent("conversation-1")
@@ -58,7 +58,7 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		view, err := projection.Get(ctx, started.ConversationID)
 		assert.NoErr(t, err, "Get")
 		assert.Equal(t, view.Thread.Title, started.ThreadTitle, "Get().Thread.Title (unchanged by the reply)")
-		assert.Equal(t, view.Thread.Recipients, started.Recipients, "Get().Thread.Recipients (unchanged by the reply)")
+		assert.Equal(t, view.Thread.Participants, started.Participants(), "Get().Thread.Participants (unchanged by the reply)")
 		assert.Len(t, view.Thread.Messages, 2, "Get().Thread.Messages (the opening message plus the reply)")
 		assert.Equal(t, view.Thread.Messages[0].Author, started.Author, "Get().Thread.Messages[0].Author (the opening author)")
 		assert.Equal(t, view.Thread.Messages[1].Author, reply.Author, "Get().Thread.Messages[1].Author (the replying author)")

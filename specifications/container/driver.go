@@ -164,9 +164,9 @@ func parseConversationLocation(location string) (domain.ConversationID, domain.S
 }
 
 func toConversationView(c apiclient.Conversation) domain.ConversationView {
-	recipients := make(domain.Recipients, len(c.Thread.Recipients))
-	for i, r := range c.Thread.Recipients {
-		recipients[i] = domain.ParticipantID(r)
+	participants := make(domain.Recipients, len(c.Thread.Participants))
+	for i, p := range c.Thread.Participants {
+		participants[i] = domain.ParticipantID(p)
 	}
 
 	messages := make([]domain.MessageView, len(c.Thread.Messages))
@@ -182,10 +182,10 @@ func toConversationView(c apiclient.Conversation) domain.ConversationView {
 		ID:          domain.ConversationID(c.Id),
 		ResourceURL: domain.ResourceURL(c.ResourceUrl),
 		Thread: domain.ThreadView{
-			ID:         domain.ThreadID(c.Thread.Id),
-			Title:      domain.ThreadTitle(c.Thread.Title),
-			Recipients: recipients,
-			Messages:   messages,
+			ID:           domain.ThreadID(c.Thread.Id),
+			Title:        domain.ThreadTitle(c.Thread.Title),
+			Participants: participants,
+			Messages:     messages,
 		},
 	}
 }
