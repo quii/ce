@@ -12,36 +12,25 @@ type ConversationEvent struct {
 	Sequence       int64
 	EventType      string
 	ConversationID string
-	ThreadID       pgtype.Text
-	MessageID      pgtype.Text
-	Creator        pgtype.Text
-	ResourceUrl    pgtype.Text
-	ThreadTitle    pgtype.Text
-	Author         pgtype.Text
-	Recipients     []string
-	MessageText    pgtype.Text
 	OccurredAt     pgtype.Timestamptz
+	Payload        []byte
 }
 
 type ConversationOutbox struct {
 	Sequence       int64
 	EventType      string
 	ConversationID string
-	ThreadID       pgtype.Text
-	MessageID      pgtype.Text
-	Creator        pgtype.Text
-	ResourceUrl    pgtype.Text
-	ThreadTitle    pgtype.Text
-	Author         pgtype.Text
-	Recipients     []string
-	MessageText    pgtype.Text
 	OccurredAt     pgtype.Timestamptz
+	Payload        []byte
 	DoneAt         pgtype.Timestamptz
 }
 
 type ConversationProjection struct {
-	ID          string
-	ResourceUrl string
+	ID           string
+	ResourceUrl  string
+	ThreadID     pgtype.Text
+	ThreadTitle  pgtype.Text
+	Participants []string
 }
 
 type ConversationProjectionMessage struct {
@@ -55,11 +44,4 @@ type ConversationProjectionMessage struct {
 type ProjectionCheckpoint struct {
 	ID       bool
 	Sequence int64
-}
-
-type ThreadProjection struct {
-	ID             string
-	ConversationID string
-	Title          string
-	Participants   []string
 }

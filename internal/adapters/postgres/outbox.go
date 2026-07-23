@@ -2,34 +2,33 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/out"
 )
 
-// Enqueue is idempotent (every EnqueueXOutboxEntry query is an ON CONFLICT
-// (sequence) DO NOTHING insert): Append already enqueues the outbox row
-// itself, in the same transaction as the event, so a use case's
-// subsequent Enqueue call is always a safe no-op in production - this
-// method only does real work when a caller (a contract test, say) drives
-// Outbox in isolation, without a prior Append.
+// Enqueue is idempotent (EnqueueOutboxEntry is an ON CONFLICT (sequence)
+// DO NOTHING insert): Append already enqueues the outbox row itself, in
+// the same transaction as the event, so a use case's subsequent Enqueue
+// call is always a safe no-op in production - this method only does real
+// work when a caller (a contract test, say) drives Outbox in isolation,
+// without a prior Append.
 func (s *Store) Enqueue(ctx context.Context, seq domain.Sequence, event domain.Event) error {
-	switch e := event.(type) {
-	case domain.ConversationCreated:
-		if err := s.queries.EnqueueConversationCreatedOutboxEntry(ctx, toEnqueueConversationCreatedOutboxEntryParams(seq, e)); err != nil {
-			return fmt.Errorf("could not enqueue outbox entry: %w", err)
-		}
-	case domain.ThreadStarted:
-		if err := s.queries.EnqueueThreadStartedOutboxEntry(ctx, toEnqueueThreadStartedOutboxEntryParams(seq, e)); err != nil {
-			return fmt.Errorf("could not enqueue outbox entry: %w", err)
-		}
-	case domain.MessagePosted:
-		if err := s.queries.EnqueueMessagePostedOutboxEntry(ctx, toEnqueueMessagePostedOutboxEntryParams(seq, e)); err != nil {
-			return fmt.Errorf("could not enqueue outbox entry: %w", err)
-		}
-	default:
-		return fmt.Errorf("cannot enqueue event of unrecognized type %T", event)
+	row, err := marshalEvent(event)
+	if err != nil {
+		return fmt.Errorf("could not enqueue outbox entry: %w", err)
+	}
+
+	if err := s.queries.EnqueueOutboxEntry(ctx, EnqueueOutboxEntryParams{
+		Sequence:       int64(seq),
+		EventType:      row.EventType,
+		ConversationID: string(row.ConversationID),
+		OccurredAt:     toTimestamptz(row.OccurredAt),
+		Payload:        row.Payload,
+	}); err != nil {
+		return fmt.Errorf("could not enqueue outbox entry: %w", err)
 	}
 
 	return nil
@@ -56,31 +55,45 @@ func (s *Store) Pending(ctx context.Context) ([]out.OutboxEntry, error) {
 	return entries, nil
 }
 
+// toDomainEvent switches on event_type - there's no way around needing to
+// know the target type before unmarshalling the payload column.
 func toDomainEvent(row ListPendingOutboxEntriesRow) (domain.Event, error) {
 	switch row.EventType {
 	case eventTypeConversationCreated:
+		var payload conversationCreatedPayload
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("could not unmarshal ConversationCreated payload for outbox sequence %d: %w", row.Sequence, err)
+		}
 		return domain.ConversationCreated{
 			ConversationID: domain.ConversationID(row.ConversationID),
-			Creator:        domain.CreatorID(row.Creator.String),
-			ResourceURL:    domain.ResourceURL(row.ResourceUrl.String),
+			Creator:        domain.CreatorID(payload.Creator),
+			ResourceURL:    domain.ResourceURL(payload.ResourceURL),
 			OccurredAt:     row.OccurredAt.Time,
 		}, nil
 	case eventTypeThreadStarted:
+		var payload threadStartedPayload
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("could not unmarshal ThreadStarted payload for outbox sequence %d: %w", row.Sequence, err)
+		}
 		return domain.ThreadStarted{
 			ConversationID: domain.ConversationID(row.ConversationID),
-			ThreadID:       domain.ThreadID(row.ThreadID.String),
-			ThreadTitle:    domain.ThreadTitle(row.ThreadTitle.String),
-			Author:         domain.ParticipantID(row.Author.String),
-			Recipients:     stringsToRecipients(row.Recipients),
+			ThreadID:       domain.ThreadID(payload.ThreadID),
+			ThreadTitle:    domain.ThreadTitle(payload.ThreadTitle),
+			Author:         domain.ParticipantID(payload.Author),
+			Recipients:     stringsToRecipients(payload.Recipients),
 			OccurredAt:     row.OccurredAt.Time,
 		}, nil
 	case eventTypeMessagePosted:
+		var payload messagePostedPayload
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			return nil, fmt.Errorf("could not unmarshal MessagePosted payload for outbox sequence %d: %w", row.Sequence, err)
+		}
 		return domain.MessagePosted{
 			ConversationID: domain.ConversationID(row.ConversationID),
-			ThreadID:       domain.ThreadID(row.ThreadID.String),
-			MessageID:      domain.MessageID(row.MessageID.String),
-			Author:         domain.ParticipantID(row.Author.String),
-			MessageText:    domain.MessageText(row.MessageText.String),
+			ThreadID:       domain.ThreadID(payload.ThreadID),
+			MessageID:      domain.MessageID(payload.MessageID),
+			Author:         domain.ParticipantID(payload.Author),
+			MessageText:    domain.MessageText(payload.MessageText),
 			OccurredAt:     row.OccurredAt.Time,
 		}, nil
 	default:

@@ -1,6 +1,8 @@
 package postgres
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -52,67 +54,94 @@ func toNullableText(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
-func toInsertConversationCreatedEventParams(event domain.ConversationCreated) InsertConversationCreatedEventParams {
-	return InsertConversationCreatedEventParams{
-		ConversationID: string(event.ConversationID),
-		Creator:        toNullableText(string(event.Creator)),
-		ResourceUrl:    toNullableText(string(event.ResourceURL)),
-		OccurredAt:     toTimestamptz(event.OccurredAt),
-	}
+// conversationCreatedPayload/threadStartedPayload/messagePostedPayload are
+// the small, adapter-local JSON shapes stored in conversation_events'/
+// conversation_outbox's payload column - just the fields specific to
+// their event_type, not the shared columns (conversation_id, occurred_at)
+// already covered by conversation_events/conversation_outbox's own
+// columns - see docs/adr/0029-fine-grained-events.md and rule 1 of
+// "simplify event storage".
+type conversationCreatedPayload struct {
+	Creator     string `json:"creator"`
+	ResourceURL string `json:"resource_url"`
 }
 
-func toEnqueueConversationCreatedOutboxEntryParams(seq domain.Sequence, event domain.ConversationCreated) EnqueueConversationCreatedOutboxEntryParams {
-	return EnqueueConversationCreatedOutboxEntryParams{
-		Sequence:       int64(seq),
-		ConversationID: string(event.ConversationID),
-		Creator:        toNullableText(string(event.Creator)),
-		ResourceUrl:    toNullableText(string(event.ResourceURL)),
-		OccurredAt:     toTimestamptz(event.OccurredAt),
-	}
+type threadStartedPayload struct {
+	ThreadID    string   `json:"thread_id"`
+	ThreadTitle string   `json:"thread_title"`
+	Author      string   `json:"author"`
+	Recipients  []string `json:"recipients"`
 }
 
-func toInsertThreadStartedEventParams(event domain.ThreadStarted) InsertThreadStartedEventParams {
-	return InsertThreadStartedEventParams{
-		ConversationID: string(event.ConversationID),
-		ThreadID:       toNullableText(string(event.ThreadID)),
-		ThreadTitle:    toNullableText(string(event.ThreadTitle)),
-		Author:         toNullableText(string(event.Author)),
-		Recipients:     recipientsToStrings(event.Recipients),
-		OccurredAt:     toTimestamptz(event.OccurredAt),
-	}
+type messagePostedPayload struct {
+	ThreadID    string `json:"thread_id"`
+	MessageID   string `json:"message_id"`
+	Author      string `json:"author"`
+	MessageText string `json:"message_text"`
 }
 
-func toEnqueueThreadStartedOutboxEntryParams(seq domain.Sequence, event domain.ThreadStarted) EnqueueThreadStartedOutboxEntryParams {
-	return EnqueueThreadStartedOutboxEntryParams{
-		Sequence:       int64(seq),
-		ConversationID: string(event.ConversationID),
-		ThreadID:       toNullableText(string(event.ThreadID)),
-		ThreadTitle:    toNullableText(string(event.ThreadTitle)),
-		Author:         toNullableText(string(event.Author)),
-		Recipients:     recipientsToStrings(event.Recipients),
-		OccurredAt:     toTimestamptz(event.OccurredAt),
-	}
+// eventRow is the shared-columns-plus-payload shape both
+// conversation_events and conversation_outbox store a domain.Event as -
+// see rule 1 of "simplify event storage". marshalEvent builds one from
+// any domain.Event, so appendEvent (event_store.go) and Enqueue
+// (outbox.go) share a single type switch instead of each having their
+// own.
+type eventRow struct {
+	EventType      string
+	ConversationID domain.ConversationID
+	OccurredAt     time.Time
+	Payload        []byte
 }
 
-func toInsertMessagePostedEventParams(event domain.MessagePosted) InsertMessagePostedEventParams {
-	return InsertMessagePostedEventParams{
-		ConversationID: string(event.ConversationID),
-		ThreadID:       toNullableText(string(event.ThreadID)),
-		MessageID:      toNullableText(string(event.MessageID)),
-		Author:         toNullableText(string(event.Author)),
-		MessageText:    toNullableText(string(event.MessageText)),
-		OccurredAt:     toTimestamptz(event.OccurredAt),
-	}
-}
-
-func toEnqueueMessagePostedOutboxEntryParams(seq domain.Sequence, event domain.MessagePosted) EnqueueMessagePostedOutboxEntryParams {
-	return EnqueueMessagePostedOutboxEntryParams{
-		Sequence:       int64(seq),
-		ConversationID: string(event.ConversationID),
-		ThreadID:       toNullableText(string(event.ThreadID)),
-		MessageID:      toNullableText(string(event.MessageID)),
-		Author:         toNullableText(string(event.Author)),
-		MessageText:    toNullableText(string(event.MessageText)),
-		OccurredAt:     toTimestamptz(event.OccurredAt),
+func marshalEvent(event domain.Event) (eventRow, error) {
+	switch e := event.(type) {
+	case domain.ConversationCreated:
+		payload, err := json.Marshal(conversationCreatedPayload{
+			Creator:     string(e.Creator),
+			ResourceURL: string(e.ResourceURL),
+		})
+		if err != nil {
+			return eventRow{}, fmt.Errorf("could not marshal ConversationCreated payload: %w", err)
+		}
+		return eventRow{
+			EventType:      eventTypeConversationCreated,
+			ConversationID: e.ConversationID,
+			OccurredAt:     e.OccurredAt,
+			Payload:        payload,
+		}, nil
+	case domain.ThreadStarted:
+		payload, err := json.Marshal(threadStartedPayload{
+			ThreadID:    string(e.ThreadID),
+			ThreadTitle: string(e.ThreadTitle),
+			Author:      string(e.Author),
+			Recipients:  recipientsToStrings(e.Recipients),
+		})
+		if err != nil {
+			return eventRow{}, fmt.Errorf("could not marshal ThreadStarted payload: %w", err)
+		}
+		return eventRow{
+			EventType:      eventTypeThreadStarted,
+			ConversationID: e.ConversationID,
+			OccurredAt:     e.OccurredAt,
+			Payload:        payload,
+		}, nil
+	case domain.MessagePosted:
+		payload, err := json.Marshal(messagePostedPayload{
+			ThreadID:    string(e.ThreadID),
+			MessageID:   string(e.MessageID),
+			Author:      string(e.Author),
+			MessageText: string(e.MessageText),
+		})
+		if err != nil {
+			return eventRow{}, fmt.Errorf("could not marshal MessagePosted payload: %w", err)
+		}
+		return eventRow{
+			EventType:      eventTypeMessagePosted,
+			ConversationID: e.ConversationID,
+			OccurredAt:     e.OccurredAt,
+			Payload:        payload,
+		}, nil
+	default:
+		return eventRow{}, fmt.Errorf("cannot marshal event of unrecognized type %T", event)
 	}
 }

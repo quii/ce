@@ -60,52 +60,39 @@ func (q *Queries) ApplyConversationCreatedProjection(ctx context.Context, arg Ap
 }
 
 const applyThreadStartedProjection = `-- name: ApplyThreadStartedProjection :exec
-INSERT INTO thread_projection (
-    id, conversation_id, title, participants
-) VALUES (
-    $1, $2, $3, $4
-)
-ON CONFLICT (id) DO UPDATE SET
-    conversation_id = EXCLUDED.conversation_id,
-    title = EXCLUDED.title,
-    participants = EXCLUDED.participants
+UPDATE conversation_projection SET
+    thread_id = $2,
+    thread_title = $3,
+    participants = $4
+WHERE id = $1
 `
 
 type ApplyThreadStartedProjectionParams struct {
-	ID             string
-	ConversationID string
-	Title          string
-	Participants   []string
+	ID           string
+	ThreadID     pgtype.Text
+	ThreadTitle  pgtype.Text
+	Participants []string
 }
 
 func (q *Queries) ApplyThreadStartedProjection(ctx context.Context, arg ApplyThreadStartedProjectionParams) error {
 	_, err := q.db.Exec(ctx, applyThreadStartedProjection,
 		arg.ID,
-		arg.ConversationID,
-		arg.Title,
+		arg.ThreadID,
+		arg.ThreadTitle,
 		arg.Participants,
 	)
 	return err
 }
 
 const getConversationProjection = `-- name: GetConversationProjection :one
-SELECT c.id, c.resource_url, t.id AS thread_id, t.title AS thread_title, t.participants
-FROM conversation_projection c
-JOIN thread_projection t ON t.conversation_id = c.id
-WHERE c.id = $1
+SELECT id, resource_url, thread_id, thread_title, participants
+FROM conversation_projection
+WHERE id = $1 AND thread_id IS NOT NULL
 `
 
-type GetConversationProjectionRow struct {
-	ID           string
-	ResourceUrl  string
-	ThreadID     string
-	ThreadTitle  string
-	Participants []string
-}
-
-func (q *Queries) GetConversationProjection(ctx context.Context, id string) (GetConversationProjectionRow, error) {
+func (q *Queries) GetConversationProjection(ctx context.Context, id string) (ConversationProjection, error) {
 	row := q.db.QueryRow(ctx, getConversationProjection, id)
-	var i GetConversationProjectionRow
+	var i ConversationProjection
 	err := row.Scan(
 		&i.ID,
 		&i.ResourceUrl,

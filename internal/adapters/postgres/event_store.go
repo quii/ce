@@ -38,35 +38,30 @@ func (s *Store) Append(ctx context.Context, events ...domain.Event) (domain.Sequ
 }
 
 func appendEvent(ctx context.Context, q *Queries, event domain.Event) (domain.Sequence, error) {
-	switch e := event.(type) {
-	case domain.ConversationCreated:
-		seq, err := q.InsertConversationCreatedEvent(ctx, toInsertConversationCreatedEventParams(e))
-		if err != nil {
-			return 0, fmt.Errorf("could not append conversation created event: %w", err)
-		}
-		if err := q.EnqueueConversationCreatedOutboxEntry(ctx, toEnqueueConversationCreatedOutboxEntryParams(domain.Sequence(seq), e)); err != nil {
-			return 0, fmt.Errorf("could not enqueue outbox entry for appended event: %w", err)
-		}
-		return domain.Sequence(seq), nil
-	case domain.ThreadStarted:
-		seq, err := q.InsertThreadStartedEvent(ctx, toInsertThreadStartedEventParams(e))
-		if err != nil {
-			return 0, fmt.Errorf("could not append thread started event: %w", err)
-		}
-		if err := q.EnqueueThreadStartedOutboxEntry(ctx, toEnqueueThreadStartedOutboxEntryParams(domain.Sequence(seq), e)); err != nil {
-			return 0, fmt.Errorf("could not enqueue outbox entry for appended event: %w", err)
-		}
-		return domain.Sequence(seq), nil
-	case domain.MessagePosted:
-		seq, err := q.InsertMessagePostedEvent(ctx, toInsertMessagePostedEventParams(e))
-		if err != nil {
-			return 0, fmt.Errorf("could not append message posted event: %w", err)
-		}
-		if err := q.EnqueueMessagePostedOutboxEntry(ctx, toEnqueueMessagePostedOutboxEntryParams(domain.Sequence(seq), e)); err != nil {
-			return 0, fmt.Errorf("could not enqueue outbox entry for appended event: %w", err)
-		}
-		return domain.Sequence(seq), nil
-	default:
-		return 0, fmt.Errorf("cannot append event of unrecognized type %T", event)
+	row, err := marshalEvent(event)
+	if err != nil {
+		return 0, fmt.Errorf("could not append event: %w", err)
 	}
+
+	seq, err := q.InsertEvent(ctx, InsertEventParams{
+		EventType:      row.EventType,
+		ConversationID: string(row.ConversationID),
+		OccurredAt:     toTimestamptz(row.OccurredAt),
+		Payload:        row.Payload,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("could not append %s event: %w", row.EventType, err)
+	}
+
+	if err := q.EnqueueOutboxEntry(ctx, EnqueueOutboxEntryParams{
+		Sequence:       seq,
+		EventType:      row.EventType,
+		ConversationID: string(row.ConversationID),
+		OccurredAt:     toTimestamptz(row.OccurredAt),
+		Payload:        row.Payload,
+	}); err != nil {
+		return 0, fmt.Errorf("could not enqueue outbox entry for appended event: %w", err)
+	}
+
+	return domain.Sequence(seq), nil
 }

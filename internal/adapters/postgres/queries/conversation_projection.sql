@@ -8,15 +8,11 @@ ON CONFLICT (id) DO UPDATE SET
     resource_url = EXCLUDED.resource_url;
 
 -- name: ApplyThreadStartedProjection :exec
-INSERT INTO thread_projection (
-    id, conversation_id, title, participants
-) VALUES (
-    $1, $2, $3, $4
-)
-ON CONFLICT (id) DO UPDATE SET
-    conversation_id = EXCLUDED.conversation_id,
-    title = EXCLUDED.title,
-    participants = EXCLUDED.participants;
+UPDATE conversation_projection SET
+    thread_id = $2,
+    thread_title = $3,
+    participants = $4
+WHERE id = $1;
 
 -- name: AppendConversationProjectionMessage :exec
 INSERT INTO conversation_projection_messages (
@@ -27,10 +23,9 @@ INSERT INTO conversation_projection_messages (
 ON CONFLICT (conversation_id, sequence) DO NOTHING;
 
 -- name: GetConversationProjection :one
-SELECT c.id, c.resource_url, t.id AS thread_id, t.title AS thread_title, t.participants
-FROM conversation_projection c
-JOIN thread_projection t ON t.conversation_id = c.id
-WHERE c.id = $1;
+SELECT id, resource_url, thread_id, thread_title, participants
+FROM conversation_projection
+WHERE id = $1 AND thread_id IS NOT NULL;
 
 -- name: ListConversationProjectionMessages :many
 SELECT conversation_id, sequence, author, message_text, posted_at

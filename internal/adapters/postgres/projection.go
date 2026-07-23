@@ -71,10 +71,10 @@ func applyConversationCreated(ctx context.Context, q *Queries, event domain.Conv
 
 func applyThreadStarted(ctx context.Context, q *Queries, event domain.ThreadStarted) error {
 	if err := q.ApplyThreadStartedProjection(ctx, ApplyThreadStartedProjectionParams{
-		ID:             string(event.ThreadID),
-		ConversationID: string(event.ConversationID),
-		Title:          string(event.ThreadTitle),
-		Participants:   recipientsToStrings(event.Participants()),
+		ID:           string(event.ConversationID),
+		ThreadID:     toNullableText(string(event.ThreadID)),
+		ThreadTitle:  toNullableText(string(event.ThreadTitle)),
+		Participants: recipientsToStrings(event.Participants()),
 	}); err != nil {
 		return fmt.Errorf("could not apply thread started projection: %w", err)
 	}
@@ -96,6 +96,12 @@ func applyMessagePosted(ctx context.Context, q *Queries, event domain.MessagePos
 	return nil
 }
 
+// Get treats a conversation whose thread hasn't started yet - a
+// ConversationCreated applied without its ThreadStarted companion - as
+// not found: GetConversationProjection's WHERE thread_id IS NOT NULL
+// means that state comes back as pgx.ErrNoRows exactly like a wholly
+// unknown id, so there's a single not-found branch below rather than a
+// separate NULL/empty check on the scanned row.
 func (s *Store) Get(ctx context.Context, id domain.ConversationID) (domain.ConversationView, error) {
 	row, err := s.queries.GetConversationProjection(ctx, string(id))
 	if err != nil {
@@ -123,8 +129,8 @@ func (s *Store) Get(ctx context.Context, id domain.ConversationID) (domain.Conve
 		ID:          domain.ConversationID(row.ID),
 		ResourceURL: domain.ResourceURL(row.ResourceUrl),
 		Thread: domain.ThreadView{
-			ID:           domain.ThreadID(row.ThreadID),
-			Title:        domain.ThreadTitle(row.ThreadTitle),
+			ID:           domain.ThreadID(row.ThreadID.String),
+			Title:        domain.ThreadTitle(row.ThreadTitle.String),
 			Participants: stringsToRecipients(row.Participants),
 			Messages:     messages,
 		},
