@@ -10,41 +10,38 @@ import (
 
 type ConversationEvent struct {
 	Sequence       int64
+	EventType      string
 	ConversationID string
-	ThreadID       string
-	MessageID      string
+	ThreadID       pgtype.Text
+	MessageID      pgtype.Text
 	Creator        pgtype.Text
 	ResourceUrl    pgtype.Text
 	ThreadTitle    pgtype.Text
-	Author         string
+	Author         pgtype.Text
 	Recipients     []string
-	MessageText    string
+	MessageText    pgtype.Text
 	OccurredAt     pgtype.Timestamptz
-	EventType      string
 }
 
 type ConversationOutbox struct {
 	Sequence       int64
+	EventType      string
 	ConversationID string
-	ThreadID       string
-	MessageID      string
+	ThreadID       pgtype.Text
+	MessageID      pgtype.Text
 	Creator        pgtype.Text
 	ResourceUrl    pgtype.Text
 	ThreadTitle    pgtype.Text
-	Author         string
+	Author         pgtype.Text
 	Recipients     []string
-	MessageText    string
+	MessageText    pgtype.Text
 	OccurredAt     pgtype.Timestamptz
 	DoneAt         pgtype.Timestamptz
-	EventType      string
 }
 
 type ConversationProjection struct {
-	ID           string
-	ResourceUrl  string
-	ThreadID     string
-	ThreadTitle  string
-	Participants []string
+	ID          string
+	ResourceUrl string
 }
 
 type ConversationProjectionMessage struct {
@@ -58,4 +55,11 @@ type ConversationProjectionMessage struct {
 type ProjectionCheckpoint struct {
 	ID       bool
 	Sequence int64
+}
+
+type ThreadProjection struct {
+	ID             string
+	ConversationID string
+	Title          string
+	Participants   []string
 }

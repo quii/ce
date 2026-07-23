@@ -11,38 +11,58 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const insertConversationStartedEvent = `-- name: InsertConversationStartedEvent :one
+const insertConversationCreatedEvent = `-- name: InsertConversationCreatedEvent :one
 INSERT INTO conversation_events (
-    event_type, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
+    event_type, conversation_id, creator, resource_url, occurred_at
 ) VALUES (
-    'ConversationStarted', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    'ConversationCreated', $1, $2, $3, $4
 )
 RETURNING sequence
 `
 
-type InsertConversationStartedEventParams struct {
+type InsertConversationCreatedEventParams struct {
 	ConversationID string
-	ThreadID       string
-	MessageID      string
 	Creator        pgtype.Text
 	ResourceUrl    pgtype.Text
-	ThreadTitle    pgtype.Text
-	Author         string
-	Recipients     []string
-	MessageText    string
 	OccurredAt     pgtype.Timestamptz
 }
 
-func (q *Queries) InsertConversationStartedEvent(ctx context.Context, arg InsertConversationStartedEventParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertConversationStartedEvent,
+func (q *Queries) InsertConversationCreatedEvent(ctx context.Context, arg InsertConversationCreatedEventParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertConversationCreatedEvent,
+		arg.ConversationID,
+		arg.Creator,
+		arg.ResourceUrl,
+		arg.OccurredAt,
+	)
+	var sequence int64
+	err := row.Scan(&sequence)
+	return sequence, err
+}
+
+const insertMessagePostedEvent = `-- name: InsertMessagePostedEvent :one
+INSERT INTO conversation_events (
+    event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
+) VALUES (
+    'MessagePosted', $1, $2, $3, $4, $5, $6
+)
+RETURNING sequence
+`
+
+type InsertMessagePostedEventParams struct {
+	ConversationID string
+	ThreadID       pgtype.Text
+	MessageID      pgtype.Text
+	Author         pgtype.Text
+	MessageText    pgtype.Text
+	OccurredAt     pgtype.Timestamptz
+}
+
+func (q *Queries) InsertMessagePostedEvent(ctx context.Context, arg InsertMessagePostedEventParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertMessagePostedEvent,
 		arg.ConversationID,
 		arg.ThreadID,
 		arg.MessageID,
-		arg.Creator,
-		arg.ResourceUrl,
-		arg.ThreadTitle,
 		arg.Author,
-		arg.Recipients,
 		arg.MessageText,
 		arg.OccurredAt,
 	)
@@ -51,31 +71,31 @@ func (q *Queries) InsertConversationStartedEvent(ctx context.Context, arg Insert
 	return sequence, err
 }
 
-const insertReplyPostedEvent = `-- name: InsertReplyPostedEvent :one
+const insertThreadStartedEvent = `-- name: InsertThreadStartedEvent :one
 INSERT INTO conversation_events (
-    event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
+    event_type, conversation_id, thread_id, thread_title, author, recipients, occurred_at
 ) VALUES (
-    'ReplyPosted', $1, $2, $3, $4, $5, $6
+    'ThreadStarted', $1, $2, $3, $4, $5, $6
 )
 RETURNING sequence
 `
 
-type InsertReplyPostedEventParams struct {
+type InsertThreadStartedEventParams struct {
 	ConversationID string
-	ThreadID       string
-	MessageID      string
-	Author         string
-	MessageText    string
+	ThreadID       pgtype.Text
+	ThreadTitle    pgtype.Text
+	Author         pgtype.Text
+	Recipients     []string
 	OccurredAt     pgtype.Timestamptz
 }
 
-func (q *Queries) InsertReplyPostedEvent(ctx context.Context, arg InsertReplyPostedEventParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertReplyPostedEvent,
+func (q *Queries) InsertThreadStartedEvent(ctx context.Context, arg InsertThreadStartedEventParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertThreadStartedEvent,
 		arg.ConversationID,
 		arg.ThreadID,
-		arg.MessageID,
+		arg.ThreadTitle,
 		arg.Author,
-		arg.MessageText,
+		arg.Recipients,
 		arg.OccurredAt,
 	)
 	var sequence int64

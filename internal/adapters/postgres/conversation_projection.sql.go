@@ -39,20 +39,63 @@ func (q *Queries) AppendConversationProjectionMessage(ctx context.Context, arg A
 	return err
 }
 
-const applyConversationStartedProjection = `-- name: ApplyConversationStartedProjection :exec
+const applyConversationCreatedProjection = `-- name: ApplyConversationCreatedProjection :exec
 INSERT INTO conversation_projection (
-    id, resource_url, thread_id, thread_title, participants
+    id, resource_url
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2
 )
 ON CONFLICT (id) DO UPDATE SET
-    resource_url = EXCLUDED.resource_url,
-    thread_id = EXCLUDED.thread_id,
-    thread_title = EXCLUDED.thread_title,
+    resource_url = EXCLUDED.resource_url
+`
+
+type ApplyConversationCreatedProjectionParams struct {
+	ID          string
+	ResourceUrl string
+}
+
+func (q *Queries) ApplyConversationCreatedProjection(ctx context.Context, arg ApplyConversationCreatedProjectionParams) error {
+	_, err := q.db.Exec(ctx, applyConversationCreatedProjection, arg.ID, arg.ResourceUrl)
+	return err
+}
+
+const applyThreadStartedProjection = `-- name: ApplyThreadStartedProjection :exec
+INSERT INTO thread_projection (
+    id, conversation_id, title, participants
+) VALUES (
+    $1, $2, $3, $4
+)
+ON CONFLICT (id) DO UPDATE SET
+    conversation_id = EXCLUDED.conversation_id,
+    title = EXCLUDED.title,
     participants = EXCLUDED.participants
 `
 
-type ApplyConversationStartedProjectionParams struct {
+type ApplyThreadStartedProjectionParams struct {
+	ID             string
+	ConversationID string
+	Title          string
+	Participants   []string
+}
+
+func (q *Queries) ApplyThreadStartedProjection(ctx context.Context, arg ApplyThreadStartedProjectionParams) error {
+	_, err := q.db.Exec(ctx, applyThreadStartedProjection,
+		arg.ID,
+		arg.ConversationID,
+		arg.Title,
+		arg.Participants,
+	)
+	return err
+}
+
+const getConversationProjection = `-- name: GetConversationProjection :one
+SELECT c.id, c.resource_url, t.id AS thread_id, t.title AS thread_title, t.participants
+FROM conversation_projection c
+JOIN thread_projection t ON t.conversation_id = c.id
+WHERE c.id = $1
+`
+
+type GetConversationProjectionRow struct {
 	ID           string
 	ResourceUrl  string
 	ThreadID     string
@@ -60,26 +103,9 @@ type ApplyConversationStartedProjectionParams struct {
 	Participants []string
 }
 
-func (q *Queries) ApplyConversationStartedProjection(ctx context.Context, arg ApplyConversationStartedProjectionParams) error {
-	_, err := q.db.Exec(ctx, applyConversationStartedProjection,
-		arg.ID,
-		arg.ResourceUrl,
-		arg.ThreadID,
-		arg.ThreadTitle,
-		arg.Participants,
-	)
-	return err
-}
-
-const getConversationProjection = `-- name: GetConversationProjection :one
-SELECT id, resource_url, thread_id, thread_title, participants
-FROM conversation_projection
-WHERE id = $1
-`
-
-func (q *Queries) GetConversationProjection(ctx context.Context, id string) (ConversationProjection, error) {
+func (q *Queries) GetConversationProjection(ctx context.Context, id string) (GetConversationProjectionRow, error) {
 	row := q.db.QueryRow(ctx, getConversationProjection, id)
-	var i ConversationProjection
+	var i GetConversationProjectionRow
 	err := row.Scan(
 		&i.ID,
 		&i.ResourceUrl,

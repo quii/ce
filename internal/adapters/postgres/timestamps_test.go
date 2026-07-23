@@ -29,39 +29,67 @@ func TestStore_TimestampsAreUTC(t *testing.T) {
 	ctx := context.Background()
 
 	occurredAt := time.Date(2024, 5, 6, 7, 8, 9, 0, time.UTC)
-	event := domain.ConversationStarted{
+	created := domain.ConversationCreated{
 		ConversationID: "conversation-utc",
-		ThreadID:       "thread-utc",
-		MessageID:      "message-utc",
 		Creator:        domain.PlaceholderCreator,
 		ResourceURL:    "https://example.com/orders/utc",
+		OccurredAt:     occurredAt,
+	}
+	threadStarted := domain.ThreadStarted{
+		ConversationID: "conversation-utc",
+		ThreadID:       "thread-utc",
 		ThreadTitle:    "UTC check",
 		Author:         "user-1",
 		Recipients:     domain.Recipients{},
+		OccurredAt:     occurredAt,
+	}
+	messagePosted := domain.MessagePosted{
+		ConversationID: "conversation-utc",
+		ThreadID:       "thread-utc",
+		MessageID:      "message-utc",
+		Author:         "user-1",
 		MessageText:    "does this come back as UTC?",
 		OccurredAt:     occurredAt,
 	}
 
-	seq, err := store.Append(ctx, event)
+	_, err = store.Append(ctx, created, threadStarted, messagePosted)
 	assert.NoErr(t, err, "Append")
 
 	pending, err := store.Pending(ctx)
 	assert.NoErr(t, err, "Pending")
-	assert.Len(t, pending, 1, "Pending()")
-	got, ok := pending[0].Event.(domain.ConversationStarted)
-	if !ok {
-		t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationStarted", pending[0].Event)
-	}
+	assert.Len(t, pending, 3, "Pending()")
+
 	// *time.Location has unexported internals cmp.Diff can't traverse -
 	// pointer identity (what *Location == compares) is the right, and
-	// only, tool here, not assert.Equal.
-	if loc := got.OccurredAt.Location(); loc != time.UTC {
-		t.Errorf("Pending()[0].Event.(domain.ConversationStarted).OccurredAt.Location() = %v, want %v", loc, time.UTC)
+	// only, tool here, not assert.Equal. Checked on all three events,
+	// not just the last, since each is inserted via its own query.
+	created, ok := pending[0].Event.(domain.ConversationCreated)
+	if !ok {
+		t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationCreated", pending[0].Event)
+	}
+	if loc := created.OccurredAt.Location(); loc != time.UTC {
+		t.Errorf("Pending()[0].Event.(domain.ConversationCreated).OccurredAt.Location() = %v, want %v", loc, time.UTC)
 	}
 
-	assert.NoErr(t, store.Apply(ctx, event, seq), "Apply")
+	gotThreadStarted, ok := pending[1].Event.(domain.ThreadStarted)
+	if !ok {
+		t.Fatalf("Pending()[1].Event = %#v, want a domain.ThreadStarted", pending[1].Event)
+	}
+	if loc := gotThreadStarted.OccurredAt.Location(); loc != time.UTC {
+		t.Errorf("Pending()[1].Event.(domain.ThreadStarted).OccurredAt.Location() = %v, want %v", loc, time.UTC)
+	}
 
-	view, err := store.Get(ctx, event.ConversationID)
+	got, ok := pending[2].Event.(domain.MessagePosted)
+	if !ok {
+		t.Fatalf("Pending()[2].Event = %#v, want a domain.MessagePosted", pending[2].Event)
+	}
+	if loc := got.OccurredAt.Location(); loc != time.UTC {
+		t.Errorf("Pending()[2].Event.(domain.MessagePosted).OccurredAt.Location() = %v, want %v", loc, time.UTC)
+	}
+
+	assert.NoErr(t, store.Apply(ctx, pending...), "Apply")
+
+	view, err := store.Get(ctx, created.ConversationID)
 	assert.NoErr(t, err, "Get")
 	if loc := view.Thread.Messages[0].PostedAt.Location(); loc != time.UTC {
 		t.Errorf("Get().Thread.Messages[0].PostedAt.Location() = %v, want %v", loc, time.UTC)

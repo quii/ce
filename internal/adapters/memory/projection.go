@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/quii/ce/internal/domain"
+	"github.com/quii/ce/internal/ports/out"
 )
 
 type Projection struct {
@@ -18,48 +19,65 @@ func NewProjection() *Projection {
 	return &Projection{conversations: make(map[domain.ConversationID]domain.ConversationView)}
 }
 
-func (p *Projection) Apply(_ context.Context, event domain.Event, seq domain.Sequence) error {
+// Apply applies every entry in the batch, in order, before advancing the
+// checkpoint once - to the last entry's sequence - rather than once per
+// entry, so a reader can never observe the checkpoint having moved past a
+// partially-applied batch (docs/adr/0029-fine-grained-events.md).
+func (p *Projection) Apply(_ context.Context, entries ...out.OutboxEntry) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	switch e := event.(type) {
-	case domain.ConversationStarted:
-		p.applyConversationStarted(e)
-	case domain.ReplyPosted:
-		if err := p.applyReplyPosted(e); err != nil {
-			return err
+	for _, entry := range entries {
+		switch e := entry.Event.(type) {
+		case domain.ConversationCreated:
+			p.applyConversationCreated(e)
+		case domain.ThreadStarted:
+			if err := p.applyThreadStarted(e); err != nil {
+				return err
+			}
+		case domain.MessagePosted:
+			if err := p.applyMessagePosted(e); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("cannot apply event of unrecognized type %T", entry.Event)
 		}
-	default:
-		return fmt.Errorf("cannot apply event of unrecognized type %T", event)
 	}
-	p.checkpoint = seq
+
+	if len(entries) > 0 {
+		p.checkpoint = entries[len(entries)-1].Sequence
+	}
 
 	return nil
 }
 
-func (p *Projection) applyConversationStarted(event domain.ConversationStarted) {
+func (p *Projection) applyConversationCreated(event domain.ConversationCreated) {
 	p.conversations[event.ConversationID] = domain.ConversationView{
 		ID:          event.ConversationID,
 		ResourceURL: event.ResourceURL,
-		Thread: domain.ThreadView{
-			ID:           event.ThreadID,
-			Title:        event.ThreadTitle,
-			Participants: event.Participants(),
-			Messages: []domain.MessageView{
-				{
-					Author:   event.Author,
-					Text:     event.MessageText,
-					PostedAt: event.OccurredAt,
-				},
-			},
-		},
 	}
 }
 
-func (p *Projection) applyReplyPosted(event domain.ReplyPosted) error {
+func (p *Projection) applyThreadStarted(event domain.ThreadStarted) error {
 	view, ok := p.conversations[event.ConversationID]
 	if !ok {
-		return fmt.Errorf("cannot apply reply for unknown conversation %q", event.ConversationID)
+		return fmt.Errorf("cannot apply thread started for unknown conversation %q", event.ConversationID)
+	}
+
+	view.Thread = domain.ThreadView{
+		ID:           event.ThreadID,
+		Title:        event.ThreadTitle,
+		Participants: event.Participants(),
+	}
+	p.conversations[event.ConversationID] = view
+
+	return nil
+}
+
+func (p *Projection) applyMessagePosted(event domain.MessagePosted) error {
+	view, ok := p.conversations[event.ConversationID]
+	if !ok {
+		return fmt.Errorf("cannot apply message for unknown conversation %q", event.ConversationID)
 	}
 
 	view.Thread.Messages = append(view.Thread.Messages, domain.MessageView{
@@ -76,8 +94,11 @@ func (p *Projection) Get(_ context.Context, id domain.ConversationID) (domain.Co
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// A ConversationCreated on its own (ThreadStarted not yet applied)
+	// leaves an entry with a zero-value Thread - not a state any story's
+	// rules give a representation for, so it isn't "found" yet either.
 	view, ok := p.conversations[id]
-	if !ok {
+	if !ok || view.Thread.ID == "" {
 		return domain.ConversationView{}, domain.ErrConversationNotFound
 	}
 

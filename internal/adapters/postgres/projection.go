@@ -8,13 +8,16 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/quii/ce/internal/domain"
+	"github.com/quii/ce/internal/ports/out"
 )
 
-// Apply advances both the read model and the checkpoint in one
-// transaction, so a reader comparing Checkpoint against a requested
-// sequence never observes one move without the other - see
-// out.Projection.
-func (s *Store) Apply(ctx context.Context, event domain.Event, seq domain.Sequence) error {
+// Apply applies every entry in the batch, in one transaction, before
+// advancing the checkpoint once - to the last entry's sequence - rather
+// than once per entry, so a reader comparing Checkpoint against a
+// requested sequence never observes a batch partially applied (e.g. a
+// ThreadStarted with no MessagePosted companion yet), per
+// docs/adr/0029-fine-grained-events.md.
+func (s *Store) Apply(ctx context.Context, entries ...out.OutboxEntry) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("could not begin projection transaction: %w", err)
@@ -23,21 +26,29 @@ func (s *Store) Apply(ctx context.Context, event domain.Event, seq domain.Sequen
 
 	q := s.queries.WithTx(tx)
 
-	switch e := event.(type) {
-	case domain.ConversationStarted:
-		if err := applyConversationStarted(ctx, q, e, seq); err != nil {
-			return err
+	for _, entry := range entries {
+		switch e := entry.Event.(type) {
+		case domain.ConversationCreated:
+			if err := applyConversationCreated(ctx, q, e); err != nil {
+				return err
+			}
+		case domain.ThreadStarted:
+			if err := applyThreadStarted(ctx, q, e); err != nil {
+				return err
+			}
+		case domain.MessagePosted:
+			if err := applyMessagePosted(ctx, q, e, entry.Sequence); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("cannot apply event of unrecognized type %T", entry.Event)
 		}
-	case domain.ReplyPosted:
-		if err := applyReplyPosted(ctx, q, e, seq); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("cannot apply event of unrecognized type %T", event)
 	}
 
-	if err := q.SetProjectionCheckpoint(ctx, int64(seq)); err != nil {
-		return fmt.Errorf("could not advance projection checkpoint: %w", err)
+	if len(entries) > 0 {
+		if err := q.SetProjectionCheckpoint(ctx, int64(entries[len(entries)-1].Sequence)); err != nil {
+			return fmt.Errorf("could not advance projection checkpoint: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -47,31 +58,31 @@ func (s *Store) Apply(ctx context.Context, event domain.Event, seq domain.Sequen
 	return nil
 }
 
-func applyConversationStarted(ctx context.Context, q *Queries, event domain.ConversationStarted, seq domain.Sequence) error {
-	if err := q.ApplyConversationStartedProjection(ctx, ApplyConversationStartedProjectionParams{
-		ID:           string(event.ConversationID),
-		ResourceUrl:  string(event.ResourceURL),
-		ThreadID:     string(event.ThreadID),
-		ThreadTitle:  string(event.ThreadTitle),
-		Participants: recipientsToStrings(event.Participants()),
+func applyConversationCreated(ctx context.Context, q *Queries, event domain.ConversationCreated) error {
+	if err := q.ApplyConversationCreatedProjection(ctx, ApplyConversationCreatedProjectionParams{
+		ID:          string(event.ConversationID),
+		ResourceUrl: string(event.ResourceURL),
 	}); err != nil {
-		return fmt.Errorf("could not apply conversation started projection: %w", err)
-	}
-
-	if err := q.AppendConversationProjectionMessage(ctx, AppendConversationProjectionMessageParams{
-		ConversationID: string(event.ConversationID),
-		Sequence:       int64(seq),
-		Author:         string(event.Author),
-		MessageText:    string(event.MessageText),
-		PostedAt:       toTimestamptz(event.OccurredAt),
-	}); err != nil {
-		return fmt.Errorf("could not append opening message to projection: %w", err)
+		return fmt.Errorf("could not apply conversation created projection: %w", err)
 	}
 
 	return nil
 }
 
-func applyReplyPosted(ctx context.Context, q *Queries, event domain.ReplyPosted, seq domain.Sequence) error {
+func applyThreadStarted(ctx context.Context, q *Queries, event domain.ThreadStarted) error {
+	if err := q.ApplyThreadStartedProjection(ctx, ApplyThreadStartedProjectionParams{
+		ID:             string(event.ThreadID),
+		ConversationID: string(event.ConversationID),
+		Title:          string(event.ThreadTitle),
+		Participants:   recipientsToStrings(event.Participants()),
+	}); err != nil {
+		return fmt.Errorf("could not apply thread started projection: %w", err)
+	}
+
+	return nil
+}
+
+func applyMessagePosted(ctx context.Context, q *Queries, event domain.MessagePosted, seq domain.Sequence) error {
 	if err := q.AppendConversationProjectionMessage(ctx, AppendConversationProjectionMessageParams{
 		ConversationID: string(event.ConversationID),
 		Sequence:       int64(seq),
@@ -79,7 +90,7 @@ func applyReplyPosted(ctx context.Context, q *Queries, event domain.ReplyPosted,
 		MessageText:    string(event.MessageText),
 		PostedAt:       toTimestamptz(event.OccurredAt),
 	}); err != nil {
-		return fmt.Errorf("could not append reply to projection: %w", err)
+		return fmt.Errorf("could not append message to projection: %w", err)
 	}
 
 	return nil

@@ -61,7 +61,7 @@ func truncate(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 
 	_, err := pool.Exec(context.Background(),
-		`TRUNCATE conversation_events, conversation_outbox, conversation_projection, conversation_projection_messages RESTART IDENTITY;
+		`TRUNCATE conversation_events, conversation_outbox, conversation_projection, thread_projection, conversation_projection_messages RESTART IDENTITY;
 		 UPDATE projection_checkpoint SET sequence = 0`,
 	)
 	assert.NoErr(t, err, "truncate postgres tables between contract test cases")

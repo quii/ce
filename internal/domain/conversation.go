@@ -60,20 +60,32 @@ func (r Recipients) Contains(id ParticipantID) bool {
 	return false
 }
 
-// ConversationStarted is the genesis event for a conversation: starting a
-// conversation creates both the conversation and its first thread, with
-// its opening message, in one operation - there is no separate event for
-// the thread or the message.
-type ConversationStarted struct {
+// ConversationCreated is raised once, the moment a conversation is
+// created - see docs/adr/0029-fine-grained-events.md. It used to be
+// bundled together with the thread it started and its opening message
+// into one ConversationStarted event, but "a conversation was created" is
+// a single, cohesive fact on its own (test 2 of that ADR): a conversation
+// has many threads in the domain model, so the thread it happens to be
+// created with here doesn't belong on this event.
+type ConversationCreated struct {
 	ConversationID ConversationID
-	ThreadID       ThreadID
-	MessageID      MessageID
 	Creator        CreatorID
 	ResourceURL    ResourceURL
+	OccurredAt     time.Time
+}
+
+// ThreadStarted is raised whenever a new thread begins on a conversation -
+// today only ever as part of StartConversation, but kept as its own event
+// (rather than folded into ConversationCreated) because a conversation
+// already has many threads in the domain model
+// (docs/adr/0029-fine-grained-events.md's test 2), independently of how
+// many callers currently produce this fact.
+type ThreadStarted struct {
+	ConversationID ConversationID
+	ThreadID       ThreadID
 	ThreadTitle    ThreadTitle
 	Author         ParticipantID
 	Recipients     Recipients
-	MessageText    MessageText
 	OccurredAt     time.Time
 }
 
@@ -81,7 +93,7 @@ type ConversationStarted struct {
 // the thread's participant set, computed once from this event and frozen
 // from then on (rules 1-2 of "thread participants"). It has no guaranteed
 // order: it's a set, not a sequence.
-func (e ConversationStarted) Participants() Recipients {
+func (e ThreadStarted) Participants() Recipients {
 	participants := make(Recipients, 0, len(e.Recipients)+1)
 	participants = append(participants, e.Author)
 	participants = append(participants, e.Recipients...)
@@ -106,44 +118,60 @@ type StartConversationParams struct {
 
 // StartConversation is the single place every rule for starting a
 // conversation is enforced - see rules 1-4 of the "start a conversation"
-// story.
-func StartConversation(params StartConversationParams) (ConversationStarted, error) {
+// story. It raises three events atomically, in this order: a
+// ConversationCreated, a ThreadStarted for its first thread, and a
+// MessagePosted for the opening message - see
+// docs/adr/0029-fine-grained-events.md. The caller (out.EventStore.Append)
+// is responsible for committing all three in one write.
+func StartConversation(params StartConversationParams) ([]Event, error) {
 	if params.ResourceURL == nil {
-		return ConversationStarted{}, ErrResourceURLRequired
+		return nil, ErrResourceURLRequired
 	}
 	if params.ThreadTitle == nil {
-		return ConversationStarted{}, ErrThreadTitleRequired
+		return nil, ErrThreadTitleRequired
 	}
 	if params.Author == nil {
-		return ConversationStarted{}, ErrAuthorRequired
+		return nil, ErrAuthorRequired
 	}
 	if params.Message == nil {
-		return ConversationStarted{}, ErrMessageRequired
+		return nil, ErrMessageRequired
 	}
 	if params.Recipients == nil {
-		return ConversationStarted{}, ErrRecipientsRequired
+		return nil, ErrRecipientsRequired
 	}
 
 	recipients, err := NewRecipients(*params.Recipients)
 	if err != nil {
-		return ConversationStarted{}, err
+		return nil, err
 	}
 
 	author := ParticipantID(*params.Author)
 	if recipients.Contains(author) {
-		return ConversationStarted{}, ErrAuthorIsRecipient
+		return nil, ErrAuthorIsRecipient
 	}
 
-	return ConversationStarted{
-		ConversationID: params.ConversationID,
-		ThreadID:       params.ThreadID,
-		MessageID:      params.MessageID,
-		Creator:        PlaceholderCreator,
-		ResourceURL:    ResourceURL(*params.ResourceURL),
-		ThreadTitle:    ThreadTitle(*params.ThreadTitle),
-		Author:         author,
-		Recipients:     recipients,
-		MessageText:    MessageText(*params.Message),
-		OccurredAt:     params.OccurredAt,
+	return []Event{
+		ConversationCreated{
+			ConversationID: params.ConversationID,
+			Creator:        PlaceholderCreator,
+			ResourceURL:    ResourceURL(*params.ResourceURL),
+			OccurredAt:     params.OccurredAt,
+		},
+		ThreadStarted{
+			ConversationID: params.ConversationID,
+			ThreadID:       params.ThreadID,
+			ThreadTitle:    ThreadTitle(*params.ThreadTitle),
+			Author:         author,
+			Recipients:     recipients,
+			OccurredAt:     params.OccurredAt,
+		},
+		MessagePosted{
+			ConversationID: params.ConversationID,
+			ThreadID:       params.ThreadID,
+			MessageID:      params.MessageID,
+			Author:         author,
+			MessageText:    MessageText(*params.Message),
+			OccurredAt:     params.OccurredAt,
+		},
 	}, nil
 }

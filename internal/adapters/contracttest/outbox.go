@@ -15,7 +15,7 @@ func Outbox(t *testing.T, newOutbox func() out.Outbox) {
 	t.Run("an enqueued entry is pending until marked done", func(t *testing.T) {
 		outbox := newOutbox()
 		ctx := context.Background()
-		event := sampleEvent("conversation-1")
+		event := sampleConversationCreated("conversation-1")
 
 		assert.NoErr(t, outbox.Enqueue(ctx, 1, event), "Enqueue")
 
@@ -23,11 +23,11 @@ func Outbox(t *testing.T, newOutbox func() out.Outbox) {
 		assert.NoErr(t, err, "Pending")
 		assert.Len(t, pending, 1, "Pending()")
 		assert.Equal(t, pending[0].Sequence, domain.Sequence(1), "Pending()[0].Sequence")
-		got, ok := pending[0].Event.(domain.ConversationStarted)
+		got, ok := pending[0].Event.(domain.ConversationCreated)
 		if !ok {
-			t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationStarted", pending[0].Event)
+			t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationCreated", pending[0].Event)
 		}
-		assert.Equal(t, got.ConversationID, event.ConversationID, "Pending()[0].Event.(domain.ConversationStarted).ConversationID")
+		assert.Equal(t, got.ConversationID, event.ConversationID, "Pending()[0].Event.(domain.ConversationCreated).ConversationID")
 
 		assert.NoErr(t, outbox.MarkDone(ctx, 1), "MarkDone")
 
@@ -36,30 +36,48 @@ func Outbox(t *testing.T, newOutbox func() out.Outbox) {
 		assert.Len(t, pending, 0, "Pending() after MarkDone")
 	})
 
-	t.Run("an enqueued reply round-trips through Pending", func(t *testing.T) {
+	t.Run("an enqueued message round-trips through Pending", func(t *testing.T) {
 		outbox := newOutbox()
 		ctx := context.Background()
-		event := sampleReplyEvent("conversation-1", "thread-1")
+		event := sampleMessagePosted("conversation-1", "thread-1", "message-1")
 
 		assert.NoErr(t, outbox.Enqueue(ctx, 1, event), "Enqueue")
 
 		pending, err := outbox.Pending(ctx)
 		assert.NoErr(t, err, "Pending")
 		assert.Len(t, pending, 1, "Pending()")
-		got, ok := pending[0].Event.(domain.ReplyPosted)
+		got, ok := pending[0].Event.(domain.MessagePosted)
 		if !ok {
-			t.Fatalf("Pending()[0].Event = %#v, want a domain.ReplyPosted", pending[0].Event)
+			t.Fatalf("Pending()[0].Event = %#v, want a domain.MessagePosted", pending[0].Event)
 		}
-		assert.Equal(t, got.ConversationID, event.ConversationID, "Pending()[0].Event.(domain.ReplyPosted).ConversationID")
-		assert.Equal(t, got.Author, event.Author, "Pending()[0].Event.(domain.ReplyPosted).Author")
+		assert.Equal(t, got.ConversationID, event.ConversationID, "Pending()[0].Event.(domain.MessagePosted).ConversationID")
+		assert.Equal(t, got.Author, event.Author, "Pending()[0].Event.(domain.MessagePosted).Author")
+	})
+
+	t.Run("an enqueued thread-started event round-trips through Pending", func(t *testing.T) {
+		outbox := newOutbox()
+		ctx := context.Background()
+		event := sampleThreadStarted("conversation-1", "thread-1")
+
+		assert.NoErr(t, outbox.Enqueue(ctx, 1, event), "Enqueue")
+
+		pending, err := outbox.Pending(ctx)
+		assert.NoErr(t, err, "Pending")
+		assert.Len(t, pending, 1, "Pending()")
+		got, ok := pending[0].Event.(domain.ThreadStarted)
+		if !ok {
+			t.Fatalf("Pending()[0].Event = %#v, want a domain.ThreadStarted", pending[0].Event)
+		}
+		assert.Equal(t, got.ConversationID, event.ConversationID, "Pending()[0].Event.(domain.ThreadStarted).ConversationID")
+		assert.Equal(t, got.ThreadID, event.ThreadID, "Pending()[0].Event.(domain.ThreadStarted).ThreadID")
 	})
 
 	t.Run("pending entries are returned in sequence order", func(t *testing.T) {
 		outbox := newOutbox()
 		ctx := context.Background()
 
-		assert.NoErr(t, outbox.Enqueue(ctx, 2, sampleEvent("conversation-2")), "Enqueue")
-		assert.NoErr(t, outbox.Enqueue(ctx, 1, sampleEvent("conversation-1")), "Enqueue")
+		assert.NoErr(t, outbox.Enqueue(ctx, 2, sampleConversationCreated("conversation-2")), "Enqueue")
+		assert.NoErr(t, outbox.Enqueue(ctx, 1, sampleConversationCreated("conversation-1")), "Enqueue")
 
 		pending, err := outbox.Pending(ctx)
 		assert.NoErr(t, err, "Pending")

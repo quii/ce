@@ -13,7 +13,7 @@ type ConversationView struct {
 }
 
 // ThreadView's Participants is the union of the thread's original author
-// and its recipients, computed once when ConversationStarted is applied to
+// and its recipients, computed once when ThreadStarted is applied to
 // build the projection and frozen from then on - a reply never changes it
 // (rules 1-2 of "thread participants"). It has no guaranteed order (rule
 // 4): it's a set, not a sequence.

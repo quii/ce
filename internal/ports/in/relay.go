@@ -32,6 +32,14 @@ func NewRelay(outbox out.Outbox, projection out.Projection) Relay {
 // returns is what stops the checkpoint from ever advancing past data
 // that was never actually applied - see rule 8 of the "start a
 // conversation" story and docs/adr/0019-event-sourcing-transactional-outbox.md.
+//
+// The whole contiguous run is applied in one Projection.Apply call, not
+// one call per entry: a single StartConversation write lands as several
+// contiguous outbox rows (docs/adr/0029-fine-grained-events.md), and
+// applying them individually would let a reader observe e.g. a
+// ThreadStarted with no MessagePosted companion yet, in between two
+// separate Drain steps - exactly the partially-applied state
+// Projection.Apply's batching exists to rule out.
 func (r *relayUseCase) Drain(ctx context.Context) error {
 	pending, err := r.outbox.Pending(ctx)
 	if err != nil {
@@ -44,18 +52,27 @@ func (r *relayUseCase) Drain(ctx context.Context) error {
 	}
 	next := checkpoint + 1
 
+	var run []out.OutboxEntry
 	for _, entry := range pending {
 		if entry.Sequence != next {
 			break
 		}
+		run = append(run, entry)
+		next++
+	}
 
-		if err := r.projection.Apply(ctx, entry.Event, entry.Sequence); err != nil {
-			return err
-		}
+	if len(run) == 0 {
+		return nil
+	}
+
+	if err := r.projection.Apply(ctx, run...); err != nil {
+		return err
+	}
+
+	for _, entry := range run {
 		if err := r.outbox.MarkDone(ctx, entry.Sequence); err != nil {
 			return err
 		}
-		next++
 	}
 
 	return nil

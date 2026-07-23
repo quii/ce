@@ -26,13 +26,16 @@ func NewEventStore() *EventStore {
 	return &EventStore{pending: make(map[domain.Sequence]domain.Event)}
 }
 
-func (s *EventStore) Append(_ context.Context, event domain.Event) (domain.Sequence, error) {
+func (s *EventStore) Append(_ context.Context, events ...domain.Event) (domain.Sequence, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.events = append(s.events, event)
-	seq := domain.Sequence(len(s.events))
-	s.pending[seq] = event
+	var seq domain.Sequence
+	for _, event := range events {
+		s.events = append(s.events, event)
+		seq = domain.Sequence(len(s.events))
+		s.pending[seq] = event
+	}
 
 	return seq, nil
 }

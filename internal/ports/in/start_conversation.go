@@ -56,8 +56,10 @@ func NewStartConversationUseCase(deps StartConversationDependencies) Conversatio
 }
 
 func (uc *startConversationUseCase) StartConversation(ctx context.Context, cmd StartConversationCommand) (StartConversationResult, error) {
-	event, err := domain.StartConversation(domain.StartConversationParams{
-		ConversationID: domain.ConversationID(uc.deps.IDs.NewID()),
+	conversationID := domain.ConversationID(uc.deps.IDs.NewID())
+
+	events, err := domain.StartConversation(domain.StartConversationParams{
+		ConversationID: conversationID,
 		ThreadID:       domain.ThreadID(uc.deps.IDs.NewID()),
 		MessageID:      domain.MessageID(uc.deps.IDs.NewID()),
 		ResourceURL:    cmd.ResourceURL,
@@ -71,10 +73,13 @@ func (uc *startConversationUseCase) StartConversation(ctx context.Context, cmd S
 		return StartConversationResult{}, err
 	}
 
-	seq, err := uc.deps.Events.Append(ctx, event)
+	// events raises ConversationCreated, ThreadStarted and MessagePosted
+	// together - Append commits all three atomically in one write, per
+	// docs/adr/0029-fine-grained-events.md.
+	seq, err := uc.deps.Events.Append(ctx, events...)
 	if err != nil {
 		return StartConversationResult{}, err
 	}
 
-	return StartConversationResult{ConversationID: event.ConversationID, Sequence: seq}, nil
+	return StartConversationResult{ConversationID: conversationID, Sequence: seq}, nil
 }

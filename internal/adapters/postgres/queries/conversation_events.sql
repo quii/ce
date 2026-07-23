@@ -1,15 +1,23 @@
--- name: InsertConversationStartedEvent :one
+-- name: InsertConversationCreatedEvent :one
 INSERT INTO conversation_events (
-    event_type, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
+    event_type, conversation_id, creator, resource_url, occurred_at
 ) VALUES (
-    'ConversationStarted', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    'ConversationCreated', $1, $2, $3, $4
 )
 RETURNING sequence;
 
--- name: InsertReplyPostedEvent :one
+-- name: InsertThreadStartedEvent :one
+INSERT INTO conversation_events (
+    event_type, conversation_id, thread_id, thread_title, author, recipients, occurred_at
+) VALUES (
+    'ThreadStarted', $1, $2, $3, $4, $5, $6
+)
+RETURNING sequence;
+
+-- name: InsertMessagePostedEvent :one
 INSERT INTO conversation_events (
     event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
 ) VALUES (
-    'ReplyPosted', $1, $2, $3, $4, $5, $6
+    'MessagePosted', $1, $2, $3, $4, $5, $6
 )
 RETURNING sequence;

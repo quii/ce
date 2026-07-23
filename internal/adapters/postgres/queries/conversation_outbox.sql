@@ -1,16 +1,24 @@
--- name: EnqueueConversationStartedOutboxEntry :exec
+-- name: EnqueueConversationCreatedOutboxEntry :exec
 INSERT INTO conversation_outbox (
-    sequence, event_type, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
+    sequence, event_type, conversation_id, creator, resource_url, occurred_at
 ) VALUES (
-    $1, 'ConversationStarted', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, 'ConversationCreated', $2, $3, $4, $5
 )
 ON CONFLICT (sequence) DO NOTHING;
 
--- name: EnqueueReplyPostedOutboxEntry :exec
+-- name: EnqueueThreadStartedOutboxEntry :exec
+INSERT INTO conversation_outbox (
+    sequence, event_type, conversation_id, thread_id, thread_title, author, recipients, occurred_at
+) VALUES (
+    $1, 'ThreadStarted', $2, $3, $4, $5, $6, $7
+)
+ON CONFLICT (sequence) DO NOTHING;
+
+-- name: EnqueueMessagePostedOutboxEntry :exec
 INSERT INTO conversation_outbox (
     sequence, event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
 ) VALUES (
-    $1, 'ReplyPosted', $2, $3, $4, $5, $6, $7
+    $1, 'MessagePosted', $2, $3, $4, $5, $6, $7
 )
 ON CONFLICT (sequence) DO NOTHING;
 

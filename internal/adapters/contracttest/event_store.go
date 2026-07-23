@@ -23,25 +23,40 @@ func EventStore(t *testing.T, newStore func() out.EventStore) {
 		store := newStore()
 		ctx := context.Background()
 
-		first, err := store.Append(ctx, sampleEvent("conversation-1"))
+		first, err := store.Append(ctx, sampleConversationCreated("conversation-1"))
 		assert.NoErr(t, err, "Append")
 		assert.Equal(t, first, domain.Sequence(1), "first Append's sequence - a fresh store starts from scratch")
 
-		second, err := store.Append(ctx, sampleEvent("conversation-2"))
+		second, err := store.Append(ctx, sampleConversationCreated("conversation-2"))
 		assert.NoErr(t, err, "Append")
 		assert.Equal(t, second, first+1, "second Append's sequence (one more than the first's sequence %d)", first)
 	})
 
-	t.Run("appending a reply after a conversation-started event assigns the next sequence", func(t *testing.T) {
+	t.Run("appending a message after a conversation-created event assigns the next sequence", func(t *testing.T) {
 		store := newStore()
 		ctx := context.Background()
 
-		first, err := store.Append(ctx, sampleEvent("conversation-1"))
-		assert.NoErr(t, err, "Append(ConversationStarted)")
+		first, err := store.Append(ctx, sampleConversationCreated("conversation-1"))
+		assert.NoErr(t, err, "Append(ConversationCreated)")
 
-		second, err := store.Append(ctx, sampleReplyEvent("conversation-1", "thread-1"))
-		assert.NoErr(t, err, "Append(ReplyPosted)")
-		assert.Equal(t, second, first+1, "Append(ReplyPosted)'s sequence (one more than the ConversationStarted's sequence %d)", first)
+		second, err := store.Append(ctx, sampleMessagePosted("conversation-1", "thread-1", "message-1"))
+		assert.NoErr(t, err, "Append(MessagePosted)")
+		assert.Equal(t, second, first+1, "Append(MessagePosted)'s sequence (one more than the ConversationCreated's sequence %d)", first)
+	})
+
+	t.Run("appending a batch of events returns the sequence of the last event in the batch", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		first, err := store.Append(ctx, sampleConversationCreated("conversation-1"))
+		assert.NoErr(t, err, "Append")
+
+		last, err := store.Append(ctx,
+			sampleThreadStarted("conversation-1", "thread-1"),
+			sampleMessagePosted("conversation-1", "thread-1", "message-1"),
+		)
+		assert.NoErr(t, err, "Append(batch of two events)")
+		assert.Equal(t, last, first+2, "Append(batch)'s sequence (two more than the first Append's sequence %d, since the batch has two events)", first)
 	})
 }
 
@@ -66,7 +81,7 @@ func EventStoreEnqueuesViaAppend(t *testing.T, newStore func() EventStoreOutbox)
 		store := newStore()
 		ctx := context.Background()
 
-		seq, err := store.Append(ctx, sampleEvent("conversation-1"))
+		seq, err := store.Append(ctx, sampleConversationCreated("conversation-1"))
 		assert.NoErr(t, err, "Append")
 
 		pending, err := store.Pending(ctx)
@@ -74,30 +89,74 @@ func EventStoreEnqueuesViaAppend(t *testing.T, newStore func() EventStoreOutbox)
 		assert.Len(t, pending, 1, "Pending() after Append(seq=%d) with no Enqueue call", seq)
 		assert.Equal(t, pending[0].Sequence, seq, "Pending()[0].Sequence after Append with no Enqueue call")
 	})
+
+	// TestStartConversation_RaisesThreeEventsAtomically
+	// (internal/ports/in/start_conversation_test.go) proves this same
+	// behaviour end-to-end through the real use case; this subtest proves
+	// it directly at the out-port level, against both the fake and the
+	// real Postgres adapter - see docs/adr/0029-fine-grained-events.md.
+	t.Run("appending a batch of events assigns sequential sequences and enqueues all of them, in order, with one call", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		created := sampleConversationCreated("conversation-1")
+		threadStarted := sampleThreadStarted("conversation-1", "thread-1")
+		messagePosted := sampleMessagePosted("conversation-1", "thread-1", "message-1")
+
+		last, err := store.Append(ctx, created, threadStarted, messagePosted)
+		assert.NoErr(t, err, "Append(batch of three events)")
+		assert.Equal(t, last, domain.Sequence(3), "Append(batch)'s returned sequence - the last of the three")
+
+		pending, err := store.Pending(ctx)
+		assert.NoErr(t, err, "Pending")
+		assert.Len(t, pending, 3, "Pending() after Append(batch) with no Enqueue call")
+
+		wantSequences := []domain.Sequence{1, 2, 3}
+		gotSequences := make([]domain.Sequence, len(pending))
+		for i, entry := range pending {
+			gotSequences[i] = entry.Sequence
+		}
+		assert.Equal(t, gotSequences, wantSequences, "Pending() sequence order after Append(batch)")
+
+		if _, ok := pending[0].Event.(domain.ConversationCreated); !ok {
+			t.Fatalf("Pending()[0].Event = %#v, want a domain.ConversationCreated", pending[0].Event)
+		}
+		if _, ok := pending[1].Event.(domain.ThreadStarted); !ok {
+			t.Fatalf("Pending()[1].Event = %#v, want a domain.ThreadStarted", pending[1].Event)
+		}
+		if _, ok := pending[2].Event.(domain.MessagePosted); !ok {
+			t.Fatalf("Pending()[2].Event = %#v, want a domain.MessagePosted", pending[2].Event)
+		}
+	})
 }
 
-func sampleEvent(conversationID string) domain.ConversationStarted {
-	return domain.ConversationStarted{
+func sampleConversationCreated(conversationID string) domain.ConversationCreated {
+	return domain.ConversationCreated{
 		ConversationID: domain.ConversationID(conversationID),
-		ThreadID:       domain.ThreadID("thread-1"),
-		MessageID:      domain.MessageID("message-1"),
 		Creator:        domain.PlaceholderCreator,
 		ResourceURL:    domain.ResourceURL("https://example.com/orders/123"),
-		ThreadTitle:    domain.ThreadTitle("Order query"),
-		Author:         domain.ParticipantID("user-1"),
-		Recipients:     domain.Recipients{"user-2", "user-3"},
-		MessageText:    domain.MessageText("Where is my order?"),
 		OccurredAt:     time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
 	}
 }
 
-func sampleReplyEvent(conversationID, threadID string) domain.ReplyPosted {
-	return domain.ReplyPosted{
+func sampleThreadStarted(conversationID, threadID string) domain.ThreadStarted {
+	return domain.ThreadStarted{
 		ConversationID: domain.ConversationID(conversationID),
 		ThreadID:       domain.ThreadID(threadID),
-		MessageID:      domain.MessageID("message-2"),
-		Author:         domain.ParticipantID("user-2"),
-		MessageText:    domain.MessageText("Looking into it"),
-		OccurredAt:     time.Date(2024, 1, 2, 3, 5, 0, 0, time.UTC),
+		ThreadTitle:    domain.ThreadTitle("Order query"),
+		Author:         domain.ParticipantID("user-1"),
+		Recipients:     domain.Recipients{"user-2", "user-3"},
+		OccurredAt:     time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+	}
+}
+
+func sampleMessagePosted(conversationID, threadID, messageID string) domain.MessagePosted {
+	return domain.MessagePosted{
+		ConversationID: domain.ConversationID(conversationID),
+		ThreadID:       domain.ThreadID(threadID),
+		MessageID:      domain.MessageID(messageID),
+		Author:         domain.ParticipantID("user-1"),
+		MessageText:    domain.MessageText("Where is my order?"),
+		OccurredAt:     time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
 	}
 }

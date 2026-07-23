@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	eventTypeConversationStarted = "ConversationStarted"
-	eventTypeReplyPosted         = "ReplyPosted"
+	eventTypeConversationCreated = "ConversationCreated"
+	eventTypeThreadStarted       = "ThreadStarted"
+	eventTypeMessagePosted       = "MessagePosted"
 )
 
 // Store is the Postgres-backed out.EventStore, out.Outbox and
@@ -51,30 +52,67 @@ func toNullableText(s string) pgtype.Text {
 	return pgtype.Text{String: s, Valid: true}
 }
 
-func toEnqueueConversationStartedOutboxEntryParams(seq domain.Sequence, event domain.ConversationStarted) EnqueueConversationStartedOutboxEntryParams {
-	return EnqueueConversationStartedOutboxEntryParams{
-		Sequence:       int64(seq),
+func toInsertConversationCreatedEventParams(event domain.ConversationCreated) InsertConversationCreatedEventParams {
+	return InsertConversationCreatedEventParams{
 		ConversationID: string(event.ConversationID),
-		ThreadID:       string(event.ThreadID),
-		MessageID:      string(event.MessageID),
 		Creator:        toNullableText(string(event.Creator)),
 		ResourceUrl:    toNullableText(string(event.ResourceURL)),
-		ThreadTitle:    toNullableText(string(event.ThreadTitle)),
-		Author:         string(event.Author),
-		Recipients:     recipientsToStrings(event.Recipients),
-		MessageText:    string(event.MessageText),
 		OccurredAt:     toTimestamptz(event.OccurredAt),
 	}
 }
 
-func toEnqueueReplyPostedOutboxEntryParams(seq domain.Sequence, event domain.ReplyPosted) EnqueueReplyPostedOutboxEntryParams {
-	return EnqueueReplyPostedOutboxEntryParams{
+func toEnqueueConversationCreatedOutboxEntryParams(seq domain.Sequence, event domain.ConversationCreated) EnqueueConversationCreatedOutboxEntryParams {
+	return EnqueueConversationCreatedOutboxEntryParams{
 		Sequence:       int64(seq),
 		ConversationID: string(event.ConversationID),
-		ThreadID:       string(event.ThreadID),
-		MessageID:      string(event.MessageID),
-		Author:         string(event.Author),
-		MessageText:    string(event.MessageText),
+		Creator:        toNullableText(string(event.Creator)),
+		ResourceUrl:    toNullableText(string(event.ResourceURL)),
+		OccurredAt:     toTimestamptz(event.OccurredAt),
+	}
+}
+
+func toInsertThreadStartedEventParams(event domain.ThreadStarted) InsertThreadStartedEventParams {
+	return InsertThreadStartedEventParams{
+		ConversationID: string(event.ConversationID),
+		ThreadID:       toNullableText(string(event.ThreadID)),
+		ThreadTitle:    toNullableText(string(event.ThreadTitle)),
+		Author:         toNullableText(string(event.Author)),
+		Recipients:     recipientsToStrings(event.Recipients),
+		OccurredAt:     toTimestamptz(event.OccurredAt),
+	}
+}
+
+func toEnqueueThreadStartedOutboxEntryParams(seq domain.Sequence, event domain.ThreadStarted) EnqueueThreadStartedOutboxEntryParams {
+	return EnqueueThreadStartedOutboxEntryParams{
+		Sequence:       int64(seq),
+		ConversationID: string(event.ConversationID),
+		ThreadID:       toNullableText(string(event.ThreadID)),
+		ThreadTitle:    toNullableText(string(event.ThreadTitle)),
+		Author:         toNullableText(string(event.Author)),
+		Recipients:     recipientsToStrings(event.Recipients),
+		OccurredAt:     toTimestamptz(event.OccurredAt),
+	}
+}
+
+func toInsertMessagePostedEventParams(event domain.MessagePosted) InsertMessagePostedEventParams {
+	return InsertMessagePostedEventParams{
+		ConversationID: string(event.ConversationID),
+		ThreadID:       toNullableText(string(event.ThreadID)),
+		MessageID:      toNullableText(string(event.MessageID)),
+		Author:         toNullableText(string(event.Author)),
+		MessageText:    toNullableText(string(event.MessageText)),
+		OccurredAt:     toTimestamptz(event.OccurredAt),
+	}
+}
+
+func toEnqueueMessagePostedOutboxEntryParams(seq domain.Sequence, event domain.MessagePosted) EnqueueMessagePostedOutboxEntryParams {
+	return EnqueueMessagePostedOutboxEntryParams{
+		Sequence:       int64(seq),
+		ConversationID: string(event.ConversationID),
+		ThreadID:       toNullableText(string(event.ThreadID)),
+		MessageID:      toNullableText(string(event.MessageID)),
+		Author:         toNullableText(string(event.Author)),
+		MessageText:    toNullableText(string(event.MessageText)),
 		OccurredAt:     toTimestamptz(event.OccurredAt),
 	}
 }

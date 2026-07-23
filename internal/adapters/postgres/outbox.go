@@ -8,21 +8,24 @@ import (
 	"github.com/quii/ce/internal/ports/out"
 )
 
-// Enqueue is idempotent (EnqueueConversationStartedOutboxEntry and
-// EnqueueReplyPostedOutboxEntry are both ON CONFLICT (sequence) DO
-// NOTHING inserts): Append already enqueues the outbox row itself, in the
-// same transaction as the event, so the use case's subsequent Enqueue
-// call is always a safe no-op in production - this method only does real
-// work when a caller (a contract test, say) drives Outbox in isolation,
-// without a prior Append.
+// Enqueue is idempotent (every EnqueueXOutboxEntry query is an ON CONFLICT
+// (sequence) DO NOTHING insert): Append already enqueues the outbox row
+// itself, in the same transaction as the event, so a use case's
+// subsequent Enqueue call is always a safe no-op in production - this
+// method only does real work when a caller (a contract test, say) drives
+// Outbox in isolation, without a prior Append.
 func (s *Store) Enqueue(ctx context.Context, seq domain.Sequence, event domain.Event) error {
 	switch e := event.(type) {
-	case domain.ConversationStarted:
-		if err := s.queries.EnqueueConversationStartedOutboxEntry(ctx, toEnqueueConversationStartedOutboxEntryParams(seq, e)); err != nil {
+	case domain.ConversationCreated:
+		if err := s.queries.EnqueueConversationCreatedOutboxEntry(ctx, toEnqueueConversationCreatedOutboxEntryParams(seq, e)); err != nil {
 			return fmt.Errorf("could not enqueue outbox entry: %w", err)
 		}
-	case domain.ReplyPosted:
-		if err := s.queries.EnqueueReplyPostedOutboxEntry(ctx, toEnqueueReplyPostedOutboxEntryParams(seq, e)); err != nil {
+	case domain.ThreadStarted:
+		if err := s.queries.EnqueueThreadStartedOutboxEntry(ctx, toEnqueueThreadStartedOutboxEntryParams(seq, e)); err != nil {
+			return fmt.Errorf("could not enqueue outbox entry: %w", err)
+		}
+	case domain.MessagePosted:
+		if err := s.queries.EnqueueMessagePostedOutboxEntry(ctx, toEnqueueMessagePostedOutboxEntryParams(seq, e)); err != nil {
 			return fmt.Errorf("could not enqueue outbox entry: %w", err)
 		}
 	default:
@@ -55,26 +58,29 @@ func (s *Store) Pending(ctx context.Context) ([]out.OutboxEntry, error) {
 
 func toDomainEvent(row ListPendingOutboxEntriesRow) (domain.Event, error) {
 	switch row.EventType {
-	case eventTypeConversationStarted:
-		return domain.ConversationStarted{
+	case eventTypeConversationCreated:
+		return domain.ConversationCreated{
 			ConversationID: domain.ConversationID(row.ConversationID),
-			ThreadID:       domain.ThreadID(row.ThreadID),
-			MessageID:      domain.MessageID(row.MessageID),
 			Creator:        domain.CreatorID(row.Creator.String),
 			ResourceURL:    domain.ResourceURL(row.ResourceUrl.String),
-			ThreadTitle:    domain.ThreadTitle(row.ThreadTitle.String),
-			Author:         domain.ParticipantID(row.Author),
-			Recipients:     stringsToRecipients(row.Recipients),
-			MessageText:    domain.MessageText(row.MessageText),
 			OccurredAt:     row.OccurredAt.Time,
 		}, nil
-	case eventTypeReplyPosted:
-		return domain.ReplyPosted{
+	case eventTypeThreadStarted:
+		return domain.ThreadStarted{
 			ConversationID: domain.ConversationID(row.ConversationID),
-			ThreadID:       domain.ThreadID(row.ThreadID),
-			MessageID:      domain.MessageID(row.MessageID),
-			Author:         domain.ParticipantID(row.Author),
-			MessageText:    domain.MessageText(row.MessageText),
+			ThreadID:       domain.ThreadID(row.ThreadID.String),
+			ThreadTitle:    domain.ThreadTitle(row.ThreadTitle.String),
+			Author:         domain.ParticipantID(row.Author.String),
+			Recipients:     stringsToRecipients(row.Recipients),
+			OccurredAt:     row.OccurredAt.Time,
+		}, nil
+	case eventTypeMessagePosted:
+		return domain.MessagePosted{
+			ConversationID: domain.ConversationID(row.ConversationID),
+			ThreadID:       domain.ThreadID(row.ThreadID.String),
+			MessageID:      domain.MessageID(row.MessageID.String),
+			Author:         domain.ParticipantID(row.Author.String),
+			MessageText:    domain.MessageText(row.MessageText.String),
 			OccurredAt:     row.OccurredAt.Time,
 		}, nil
 	default:

@@ -11,73 +11,93 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const enqueueConversationStartedOutboxEntry = `-- name: EnqueueConversationStartedOutboxEntry :exec
+const enqueueConversationCreatedOutboxEntry = `-- name: EnqueueConversationCreatedOutboxEntry :exec
 INSERT INTO conversation_outbox (
-    sequence, event_type, conversation_id, thread_id, message_id, creator, resource_url, thread_title, author, recipients, message_text, occurred_at
+    sequence, event_type, conversation_id, creator, resource_url, occurred_at
 ) VALUES (
-    $1, 'ConversationStarted', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, 'ConversationCreated', $2, $3, $4, $5
 )
 ON CONFLICT (sequence) DO NOTHING
 `
 
-type EnqueueConversationStartedOutboxEntryParams struct {
+type EnqueueConversationCreatedOutboxEntryParams struct {
 	Sequence       int64
 	ConversationID string
-	ThreadID       string
-	MessageID      string
 	Creator        pgtype.Text
 	ResourceUrl    pgtype.Text
-	ThreadTitle    pgtype.Text
-	Author         string
-	Recipients     []string
-	MessageText    string
 	OccurredAt     pgtype.Timestamptz
 }
 
-func (q *Queries) EnqueueConversationStartedOutboxEntry(ctx context.Context, arg EnqueueConversationStartedOutboxEntryParams) error {
-	_, err := q.db.Exec(ctx, enqueueConversationStartedOutboxEntry,
+func (q *Queries) EnqueueConversationCreatedOutboxEntry(ctx context.Context, arg EnqueueConversationCreatedOutboxEntryParams) error {
+	_, err := q.db.Exec(ctx, enqueueConversationCreatedOutboxEntry,
+		arg.Sequence,
+		arg.ConversationID,
+		arg.Creator,
+		arg.ResourceUrl,
+		arg.OccurredAt,
+	)
+	return err
+}
+
+const enqueueMessagePostedOutboxEntry = `-- name: EnqueueMessagePostedOutboxEntry :exec
+INSERT INTO conversation_outbox (
+    sequence, event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
+) VALUES (
+    $1, 'MessagePosted', $2, $3, $4, $5, $6, $7
+)
+ON CONFLICT (sequence) DO NOTHING
+`
+
+type EnqueueMessagePostedOutboxEntryParams struct {
+	Sequence       int64
+	ConversationID string
+	ThreadID       pgtype.Text
+	MessageID      pgtype.Text
+	Author         pgtype.Text
+	MessageText    pgtype.Text
+	OccurredAt     pgtype.Timestamptz
+}
+
+func (q *Queries) EnqueueMessagePostedOutboxEntry(ctx context.Context, arg EnqueueMessagePostedOutboxEntryParams) error {
+	_, err := q.db.Exec(ctx, enqueueMessagePostedOutboxEntry,
 		arg.Sequence,
 		arg.ConversationID,
 		arg.ThreadID,
 		arg.MessageID,
-		arg.Creator,
-		arg.ResourceUrl,
-		arg.ThreadTitle,
 		arg.Author,
-		arg.Recipients,
 		arg.MessageText,
 		arg.OccurredAt,
 	)
 	return err
 }
 
-const enqueueReplyPostedOutboxEntry = `-- name: EnqueueReplyPostedOutboxEntry :exec
+const enqueueThreadStartedOutboxEntry = `-- name: EnqueueThreadStartedOutboxEntry :exec
 INSERT INTO conversation_outbox (
-    sequence, event_type, conversation_id, thread_id, message_id, author, message_text, occurred_at
+    sequence, event_type, conversation_id, thread_id, thread_title, author, recipients, occurred_at
 ) VALUES (
-    $1, 'ReplyPosted', $2, $3, $4, $5, $6, $7
+    $1, 'ThreadStarted', $2, $3, $4, $5, $6, $7
 )
 ON CONFLICT (sequence) DO NOTHING
 `
 
-type EnqueueReplyPostedOutboxEntryParams struct {
+type EnqueueThreadStartedOutboxEntryParams struct {
 	Sequence       int64
 	ConversationID string
-	ThreadID       string
-	MessageID      string
-	Author         string
-	MessageText    string
+	ThreadID       pgtype.Text
+	ThreadTitle    pgtype.Text
+	Author         pgtype.Text
+	Recipients     []string
 	OccurredAt     pgtype.Timestamptz
 }
 
-func (q *Queries) EnqueueReplyPostedOutboxEntry(ctx context.Context, arg EnqueueReplyPostedOutboxEntryParams) error {
-	_, err := q.db.Exec(ctx, enqueueReplyPostedOutboxEntry,
+func (q *Queries) EnqueueThreadStartedOutboxEntry(ctx context.Context, arg EnqueueThreadStartedOutboxEntryParams) error {
+	_, err := q.db.Exec(ctx, enqueueThreadStartedOutboxEntry,
 		arg.Sequence,
 		arg.ConversationID,
 		arg.ThreadID,
-		arg.MessageID,
+		arg.ThreadTitle,
 		arg.Author,
-		arg.MessageText,
+		arg.Recipients,
 		arg.OccurredAt,
 	)
 	return err
@@ -94,14 +114,14 @@ type ListPendingOutboxEntriesRow struct {
 	Sequence       int64
 	EventType      string
 	ConversationID string
-	ThreadID       string
-	MessageID      string
+	ThreadID       pgtype.Text
+	MessageID      pgtype.Text
 	Creator        pgtype.Text
 	ResourceUrl    pgtype.Text
 	ThreadTitle    pgtype.Text
-	Author         string
+	Author         pgtype.Text
 	Recipients     []string
-	MessageText    string
+	MessageText    pgtype.Text
 	OccurredAt     pgtype.Timestamptz
 }
 
