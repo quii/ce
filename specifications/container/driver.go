@@ -84,6 +84,39 @@ func (d *Driver) StartConversation(ctx context.Context, cmd in.StartConversation
 	return in.StartConversationResult{ConversationID: id, Sequence: seq}, nil
 }
 
+func (d *Driver) AddThread(ctx context.Context, cmd in.AddThreadCommand) (in.AddThreadResult, error) {
+	resp, err := d.client.AddThreadWithResponse(ctx, cmd.ConversationID, apiclient.AddThreadJSONRequestBody{
+		ThreadTitle: cmd.ThreadTitle,
+		Author:      cmd.Author,
+		Recipients:  cmd.Recipients,
+		Message:     cmd.Message,
+	})
+	if err != nil {
+		return in.AddThreadResult{}, err
+	}
+
+	switch resp.StatusCode() {
+	case http.StatusBadRequest:
+		message := "request rejected"
+		if resp.JSON400 != nil {
+			message = resp.JSON400.Message
+		}
+		return in.AddThreadResult{}, domain.NewValidationError(message)
+	case http.StatusNotFound:
+		return in.AddThreadResult{}, domain.ErrConversationNotFound
+	case http.StatusAccepted:
+	default:
+		return in.AddThreadResult{}, fmt.Errorf("unexpected status code %d", resp.StatusCode())
+	}
+
+	id, seq, err := parseConversationLocation(resp.HTTPResponse.Header.Get("Location"))
+	if err != nil {
+		return in.AddThreadResult{}, err
+	}
+
+	return in.AddThreadResult{ConversationID: id, Sequence: seq}, nil
+}
+
 func (d *Driver) ReplyToThread(ctx context.Context, cmd in.ReplyToThreadCommand) (in.ReplyToThreadResult, error) {
 	resp, err := d.client.ReplyToThreadWithResponse(ctx, cmd.ConversationID, cmd.ThreadID, apiclient.ReplyToThreadJSONRequestBody{
 		Author: cmd.Author,
@@ -164,13 +197,26 @@ func parseConversationLocation(location string) (domain.ConversationID, domain.S
 }
 
 func toConversationView(c apiclient.Conversation) domain.ConversationView {
-	participants := make(domain.Recipients, len(c.Thread.Participants))
-	for i, p := range c.Thread.Participants {
+	threads := make([]domain.ThreadView, len(c.Threads))
+	for i, t := range c.Threads {
+		threads[i] = toThreadView(t)
+	}
+
+	return domain.ConversationView{
+		ID:          domain.ConversationID(c.Id),
+		ResourceURL: domain.ResourceURL(c.ResourceUrl),
+		Threads:     threads,
+	}
+}
+
+func toThreadView(t apiclient.Thread) domain.ThreadView {
+	participants := make(domain.Recipients, len(t.Participants))
+	for i, p := range t.Participants {
 		participants[i] = domain.ParticipantID(p)
 	}
 
-	messages := make([]domain.MessageView, len(c.Thread.Messages))
-	for i, m := range c.Thread.Messages {
+	messages := make([]domain.MessageView, len(t.Messages))
+	for i, m := range t.Messages {
 		messages[i] = domain.MessageView{
 			Author:   domain.ParticipantID(m.Author),
 			Text:     domain.MessageText(m.Text),
@@ -178,14 +224,10 @@ func toConversationView(c apiclient.Conversation) domain.ConversationView {
 		}
 	}
 
-	return domain.ConversationView{
-		ID:          domain.ConversationID(c.Id),
-		ResourceURL: domain.ResourceURL(c.ResourceUrl),
-		Thread: domain.ThreadView{
-			ID:           domain.ThreadID(c.Thread.Id),
-			Title:        domain.ThreadTitle(c.Thread.Title),
-			Participants: participants,
-			Messages:     messages,
-		},
+	return domain.ThreadView{
+		ID:           domain.ThreadID(t.Id),
+		Title:        domain.ThreadTitle(t.Title),
+		Participants: participants,
+		Messages:     messages,
 	}
 }

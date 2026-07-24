@@ -11,12 +11,13 @@ import (
 
 type ConversationHandler struct {
 	starter in.ConversationStarter
+	adder   in.ThreadAdder
 	replier in.ThreadReplier
 	getter  in.ConversationGetter
 }
 
-func NewConversationHandler(starter in.ConversationStarter, replier in.ThreadReplier, getter in.ConversationGetter) *ConversationHandler {
-	return &ConversationHandler{starter: starter, replier: replier, getter: getter}
+func NewConversationHandler(starter in.ConversationStarter, adder in.ThreadAdder, replier in.ThreadReplier, getter in.ConversationGetter) *ConversationHandler {
+	return &ConversationHandler{starter: starter, adder: adder, replier: replier, getter: getter}
 }
 
 func (h *ConversationHandler) StartConversation(ctx context.Context, request StartConversationRequestObject) (StartConversationResponseObject, error) {
@@ -31,9 +32,8 @@ func (h *ConversationHandler) StartConversation(ctx context.Context, request Sta
 
 	result, err := h.starter.StartConversation(ctx, cmd)
 	if err != nil {
-		var validationErr domain.ValidationError
-		if errors.As(err, &validationErr) {
-			return StartConversation400JSONResponse{Message: validationErr.Error()}, nil
+		if kind, message := classifyDomainError(err, nil); kind == validationErrorKind {
+			return StartConversation400JSONResponse{Message: message}, nil
 		}
 		return nil, err
 	}
@@ -41,6 +41,33 @@ func (h *ConversationHandler) StartConversation(ctx context.Context, request Sta
 	location := fmt.Sprintf("/conversations/%s?after=%d", result.ConversationID, result.Sequence)
 	return StartConversation202Response{
 		Headers: StartConversation202ResponseHeaders{Location: &location},
+	}, nil
+}
+
+func (h *ConversationHandler) AddThread(ctx context.Context, request AddThreadRequestObject) (AddThreadResponseObject, error) {
+	cmd := in.AddThreadCommand{ConversationID: request.ConversationId}
+	if request.Body != nil {
+		cmd.ThreadTitle = request.Body.ThreadTitle
+		cmd.Author = request.Body.Author
+		cmd.Recipients = request.Body.Recipients
+		cmd.Message = request.Body.Message
+	}
+
+	result, err := h.adder.AddThread(ctx, cmd)
+	if err != nil {
+		switch kind, message := classifyDomainError(err, nil); kind {
+		case validationErrorKind:
+			return AddThread400JSONResponse{Message: message}, nil
+		case notFoundErrorKind:
+			return AddThread404JSONResponse{Message: message}, nil
+		default:
+			return nil, err
+		}
+	}
+
+	location := fmt.Sprintf("/conversations/%s?after=%d", result.ConversationID, result.Sequence)
+	return AddThread202Response{
+		Headers: AddThread202ResponseHeaders{Location: &location},
 	}, nil
 }
 
@@ -56,17 +83,16 @@ func (h *ConversationHandler) ReplyToThread(ctx context.Context, request ReplyTo
 
 	result, err := h.replier.ReplyToThread(ctx, cmd)
 	if err != nil {
-		var validationErr domain.ValidationError
-		if errors.As(err, &validationErr) {
-			return ReplyToThread400JSONResponse{Message: validationErr.Error()}, nil
+		switch kind, message := classifyDomainError(err, domain.ErrThreadNotFound); kind {
+		case validationErrorKind:
+			return ReplyToThread400JSONResponse{Message: message}, nil
+		case notFoundErrorKind:
+			return ReplyToThread404JSONResponse{Message: message}, nil
+		case forbiddenErrorKind:
+			return ReplyToThread403JSONResponse{Message: message}, nil
+		default:
+			return nil, err
 		}
-		if errors.Is(err, domain.ErrConversationNotFound) || errors.Is(err, domain.ErrThreadNotFound) {
-			return ReplyToThread404JSONResponse{Message: err.Error()}, nil
-		}
-		if errors.Is(err, domain.ErrReplyForbidden) {
-			return ReplyToThread403JSONResponse{Message: err.Error()}, nil
-		}
-		return nil, err
 	}
 
 	location := fmt.Sprintf("/conversations/%s?after=%d", result.ConversationID, result.Sequence)
@@ -94,13 +120,26 @@ func (h *ConversationHandler) GetConversation(ctx context.Context, request GetCo
 }
 
 func toConversation(view domain.ConversationView) Conversation {
-	participants := make([]string, len(view.Thread.Participants))
-	for i, p := range view.Thread.Participants {
+	threads := make([]Thread, len(view.Threads))
+	for i, t := range view.Threads {
+		threads[i] = toThread(t)
+	}
+
+	return Conversation{
+		Id:          string(view.ID),
+		ResourceUrl: string(view.ResourceURL),
+		Threads:     threads,
+	}
+}
+
+func toThread(thread domain.ThreadView) Thread {
+	participants := make([]string, len(thread.Participants))
+	for i, p := range thread.Participants {
 		participants[i] = string(p)
 	}
 
-	messages := make([]Message, len(view.Thread.Messages))
-	for i, m := range view.Thread.Messages {
+	messages := make([]Message, len(thread.Messages))
+	for i, m := range thread.Messages {
 		messages[i] = Message{
 			Author:   string(m.Author),
 			Text:     string(m.Text),
@@ -108,14 +147,10 @@ func toConversation(view domain.ConversationView) Conversation {
 		}
 	}
 
-	return Conversation{
-		Id:          string(view.ID),
-		ResourceUrl: string(view.ResourceURL),
-		Thread: Thread{
-			Id:           string(view.Thread.ID),
-			Title:        string(view.Thread.Title),
-			Participants: participants,
-			Messages:     messages,
-		},
+	return Thread{
+		Id:           string(thread.ID),
+		Title:        string(thread.Title),
+		Participants: participants,
+		Messages:     messages,
 	}
 }

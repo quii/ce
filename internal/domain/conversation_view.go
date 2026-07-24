@@ -5,11 +5,30 @@ import "time"
 // ConversationView is the read model served by GetConversation - rule 10
 // of the "start a conversation" story. It's a plain, behaviourless
 // projection of past events, not an aggregate with invariants of its own,
-// see docs/adr/0006-rich-domain-not-anemic.md.
+// see docs/adr/0006-rich-domain-not-anemic.md. Threads is a list, not a
+// single value, since a conversation is no longer assumed to have exactly
+// one thread (rule 9 of "add a thread to a conversation") - in creation
+// order (rule 10): the original thread first, then each added thread in
+// the order its ThreadStarted event was appended.
 type ConversationView struct {
 	ID          ConversationID
 	ResourceURL ResourceURL
-	Thread      ThreadView
+	Threads     []ThreadView
+}
+
+// Thread returns the thread with the given id, and whether it was found -
+// the one place a caller looks a specific thread up out of the list, used
+// by AuthorizeReply (rule 2 of "reply to a thread"). Adding a thread's own
+// existence check (rule 4 of "add a thread to a conversation") only needs
+// to know whether the conversation exists at all, so it goes through
+// out.Projection.Exists instead of this method.
+func (c ConversationView) Thread(id ThreadID) (ThreadView, bool) {
+	for _, t := range c.Threads {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return ThreadView{}, false
 }
 
 // ThreadView's Participants is the union of the thread's original author

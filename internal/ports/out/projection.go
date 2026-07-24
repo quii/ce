@@ -17,5 +17,11 @@ import (
 type Projection interface {
 	Apply(ctx context.Context, entries ...OutboxEntry) error
 	Get(ctx context.Context, id domain.ConversationID) (domain.ConversationView, error)
+	// Exists reports whether a conversation is currently readable - the
+	// same "has at least one thread" notion Get's not-found check uses,
+	// without paying for a full Get (every thread and message) when a
+	// caller only needs a yes/no answer - see AddThread's existence check
+	// (rule 4 of "add a thread to a conversation").
+	Exists(ctx context.Context, id domain.ConversationID) (bool, error)
 	Checkpoint(ctx context.Context) (domain.Sequence, error)
 }

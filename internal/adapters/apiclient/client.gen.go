@@ -17,11 +17,21 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// AddThreadRequest All four fields are required by CE's domain rules, but none are marked required at the schema level - the same posture as StartConversationRequest: a missing key and a present-but-empty value are meaningfully different (see the "add a thread to a conversation" story), so all fields stay optional/pointer here.
+type AddThreadRequest struct {
+	Author      *string   `json:"author,omitempty"`
+	Message     *string   `json:"message,omitempty"`
+	Recipients  *[]string `json:"recipients,omitempty"`
+	ThreadTitle *string   `json:"threadTitle,omitempty"`
+}
+
 // Conversation defines model for Conversation.
 type Conversation struct {
 	Id          string `json:"id"`
 	ResourceUrl string `json:"resourceUrl"`
-	Thread      Thread `json:"thread"`
+
+	// Threads One entry per thread the conversation has, in creation order: the original thread first, then each added thread in the order it was started (see the "add a thread to a conversation" story) - superseding the single "thread" field a conversation used to expose.
+	Threads []Thread `json:"threads"`
 }
 
 // Error defines model for Error.
@@ -79,6 +89,9 @@ type GetGreetingParams struct {
 
 // StartConversationJSONRequestBody defines body for StartConversation for application/json ContentType.
 type StartConversationJSONRequestBody = StartConversationRequest
+
+// AddThreadJSONRequestBody defines body for AddThread for application/json ContentType.
+type AddThreadJSONRequestBody = AddThreadRequest
 
 // ReplyToThreadJSONRequestBody defines body for ReplyToThread for application/json ContentType.
 type ReplyToThreadJSONRequestBody = ReplyToThreadRequest
@@ -161,6 +174,11 @@ type ClientInterface interface {
 
 	StartConversation(ctx context.Context, body StartConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AddThreadWithBody request with any body
+	AddThreadWithBody(ctx context.Context, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	AddThread(ctx context.Context, conversationId string, body AddThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ReplyToThreadWithBody request with any body
 	ReplyToThreadWithBody(ctx context.Context, conversationId string, threadId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -187,6 +205,30 @@ func (c *Client) StartConversationWithBody(ctx context.Context, contentType stri
 
 func (c *Client) StartConversation(ctx context.Context, body StartConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStartConversationRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddThreadWithBody(ctx context.Context, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddThreadRequestWithBody(c.Server, conversationId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddThread(ctx context.Context, conversationId string, body AddThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddThreadRequest(c.Server, conversationId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +308,53 @@ func NewStartConversationRequestWithBody(server string, contentType string, body
 	}
 
 	operationPath := fmt.Sprintf("/conversations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAddThreadRequest calls the generic AddThread builder with application/json body
+func NewAddThreadRequest(server string, conversationId string, body AddThreadJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAddThreadRequestWithBody(server, conversationId, "application/json", bodyReader)
+}
+
+// NewAddThreadRequestWithBody generates requests for AddThread with any type of body
+func NewAddThreadRequestWithBody(server string, conversationId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/conversations/%s/threads", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -502,6 +591,11 @@ type ClientWithResponsesInterface interface {
 
 	StartConversationWithResponse(ctx context.Context, body StartConversationJSONRequestBody, reqEditors ...RequestEditorFn) (*StartConversationResponse, error)
 
+	// AddThreadWithBodyWithResponse request with any body
+	AddThreadWithBodyWithResponse(ctx context.Context, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddThreadResponse, error)
+
+	AddThreadWithResponse(ctx context.Context, conversationId string, body AddThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*AddThreadResponse, error)
+
 	// ReplyToThreadWithBodyWithResponse request with any body
 	ReplyToThreadWithBodyWithResponse(ctx context.Context, conversationId string, threadId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplyToThreadResponse, error)
 
@@ -538,6 +632,37 @@ func (r StartConversationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r StartConversationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AddThreadResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r AddThreadResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddThreadResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AddThreadResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -654,6 +779,23 @@ func (c *ClientWithResponses) StartConversationWithResponse(ctx context.Context,
 	return ParseStartConversationResponse(rsp)
 }
 
+// AddThreadWithBodyWithResponse request with arbitrary body returning *AddThreadResponse
+func (c *ClientWithResponses) AddThreadWithBodyWithResponse(ctx context.Context, conversationId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AddThreadResponse, error) {
+	rsp, err := c.AddThreadWithBody(ctx, conversationId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddThreadResponse(rsp)
+}
+
+func (c *ClientWithResponses) AddThreadWithResponse(ctx context.Context, conversationId string, body AddThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*AddThreadResponse, error) {
+	rsp, err := c.AddThread(ctx, conversationId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddThreadResponse(rsp)
+}
+
 // ReplyToThreadWithBodyWithResponse request with arbitrary body returning *ReplyToThreadResponse
 func (c *ClientWithResponses) ReplyToThreadWithBodyWithResponse(ctx context.Context, conversationId string, threadId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplyToThreadResponse, error) {
 	rsp, err := c.ReplyToThreadWithBody(ctx, conversationId, threadId, contentType, body, reqEditors...)
@@ -709,6 +851,39 @@ func ParseStartConversationResponse(rsp *http.Response) (*StartConversationRespo
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddThreadResponse parses an HTTP response from a AddThreadWithResponse call
+func ParseAddThreadResponse(rsp *http.Response) (*AddThreadResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddThreadResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

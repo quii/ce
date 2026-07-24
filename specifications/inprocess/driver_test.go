@@ -17,6 +17,7 @@ func TestGreeting(t *testing.T) {
 
 type conversationDriver struct {
 	in.ConversationStarter
+	in.ThreadAdder
 	in.ThreadReplier
 	in.ConversationGetter
 	in.Relay
@@ -31,6 +32,12 @@ func newConversationDriver() conversationDriver {
 			IDs:    memory.NewIDGenerator(),
 			Clock:  memory.NewClock(),
 			Events: events,
+		}),
+		ThreadAdder: in.NewAddThreadUseCase(in.AddThreadDependencies{
+			IDs:        memory.NewIDGenerator(),
+			Clock:      memory.NewClock(),
+			Events:     events,
+			Projection: projection,
 		}),
 		ThreadReplier: in.NewReplyToThreadUseCase(in.ReplyToThreadDependencies{
 			IDs:        memory.NewIDGenerator(),
@@ -53,4 +60,8 @@ func TestStartConversation_Projection(t *testing.T) {
 
 func TestReplyToThread(t *testing.T) {
 	specifications.ReplyToThreadSpecification(t, newConversationDriver())
+}
+
+func TestAddThread(t *testing.T) {
+	specifications.AddThreadSpecification(t, newConversationDriver())
 }

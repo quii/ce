@@ -48,6 +48,12 @@ func TestReplyToThread(t *testing.T) {
 	specifications.ReplyToThreadSpecification(t, driver)
 }
 
+func TestAddThread(t *testing.T) {
+	driver := container.New(startTopology(t).apiBaseURL)
+
+	specifications.AddThreadSpecification(t, driver)
+}
+
 func TestAPIDocs(t *testing.T) {
 	baseURL := startTopology(t).apiBaseURL
 

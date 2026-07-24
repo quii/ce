@@ -50,7 +50,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 		})
 
 		assert.Equal(t, string(view.ResourceURL), "https://example.com/orders/123", "ResourceURL")
-		assert.Equal(t, string(view.Thread.Title), "Order query", "Thread.Title")
+		assert.Equal(t, string(view.firstThread().Title), "Order query", "Threads[0].Title")
 		assertParticipants(t, view, []string{"user-1", "user-2", "user-3"})
 		assertMessages(t, view, "user-1", "Where is my order?")
 	})
@@ -64,7 +64,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 			Message:     strPtr(""),
 		})
 
-		assert.Equal(t, string(view.Thread.Title), "", "Thread.Title")
+		assert.Equal(t, string(view.firstThread().Title), "", "Threads[0].Title")
 		assertMessages(t, view, "user-1", "")
 	})
 
@@ -101,7 +101,7 @@ func ConversationProjectionSpecification(t *testing.T, driver ConversationProjec
 			Message:     strPtr("Where is my order?"),
 		})
 
-		result, err := reply(t, driver, string(started.ID), string(started.Thread.ID), "user-2", "Looking into it")
+		result, err := reply(t, driver, string(started.ID), string(started.firstThread().ID), "user-2", "Looking into it")
 		assert.NoErr(t, err, "ReplyToThread")
 
 		view := drainAndWait(t, driver, string(started.ID), result.Sequence)
@@ -164,26 +164,27 @@ type httpConversationView struct {
 	domain.ConversationView
 }
 
-// assertParticipants checks membership rather than positional equality -
-// ThreadView.Participants has no guaranteed order (rule 4 of "thread
-// participants"), so two participant sets with the same members in a
-// different order are the same value as far as this story's rules go.
+// firstThread returns the conversation's original thread - what every
+// scenario predating "add a thread to a conversation" was written
+// against, back when a conversation was assumed to have exactly one (rule
+// 10 of "start a conversation", superseded by rule 9 of "add a thread to a
+// conversation": it's still the first entry in Threads, in creation
+// order).
+func (v httpConversationView) firstThread() domain.ThreadView {
+	return v.Threads[0]
+}
+
+// assertParticipants checks the conversation's first thread's participants
+// - see assertThreadParticipants, the single shared implementation every
+// specification's participants assertion funnels through.
 func assertParticipants(t *testing.T, view httpConversationView, want []string) {
 	t.Helper()
 
-	assert.Len(t, view.Thread.Participants, len(want), "Thread.Participants")
-	for _, id := range want {
-		assert.Contains(t, view.Thread.Participants, domain.ParticipantID(id), "Thread.Participants")
-	}
+	assertThreadParticipants(t, view.firstThread(), want)
 }
 
 func assertMessages(t *testing.T, view httpConversationView, wantAuthor, wantText string) {
 	t.Helper()
 
-	assert.Len(t, view.Thread.Messages, 1, "Thread.Messages")
-
-	got := view.Thread.Messages[0]
-	assert.Equal(t, string(got.Author), wantAuthor, "Messages[0].Author")
-	assert.Equal(t, string(got.Text), wantText, "Messages[0].Text")
-	assert.False(t, got.PostedAt.IsZero(), "Messages[0].PostedAt is zero, want a real timestamp")
+	assertThreadMessages(t, view.firstThread(), []wantMessage{{Author: wantAuthor, Text: wantText}})
 }

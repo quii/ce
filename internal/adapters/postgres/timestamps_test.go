@@ -91,7 +91,6 @@ func TestStore_TimestampsAreUTC(t *testing.T) {
 
 	view, err := store.Get(ctx, created.ConversationID)
 	assert.NoErr(t, err, "Get")
-	if loc := view.Thread.Messages[0].PostedAt.Location(); loc != time.UTC {
-		t.Errorf("Get().Thread.Messages[0].PostedAt.Location() = %v, want %v", loc, time.UTC)
-	}
+	loc := view.Threads[0].Messages[0].PostedAt.Location()
+	assert.True(t, loc == time.UTC, "Get().Threads[0].Messages[0].PostedAt.Location() = %v, want %v", loc, time.UTC)
 }

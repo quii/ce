@@ -61,10 +61,11 @@ func ValidateReply(params ReplyParams) (MessagePosted, error) {
 // has to belong to the given conversation (rule 2), and its author has to
 // already be one of the thread's frozen participants (rule 3).
 func AuthorizeReply(view ConversationView, reply MessagePosted) error {
-	if reply.ThreadID != view.Thread.ID {
+	thread, ok := view.Thread(reply.ThreadID)
+	if !ok {
 		return ErrThreadNotFound
 	}
-	if !view.Thread.HasParticipant(reply.Author) {
+	if !thread.HasParticipant(reply.Author) {
 		return ErrReplyForbidden
 	}
 

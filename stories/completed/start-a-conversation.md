@@ -13,7 +13,7 @@ As a calling application, I can start a conversation about a resource by posting
 7. A successful start responds `202 Accepted` with a `Location` header for the new conversation, carrying the sequence number of the appended event as an `after` query parameter.
 8. `GET /conversations/{id}?after=N` returns pending until the read projection's checkpoint reaches sequence `N`, and the full representation once it has.
 9. `GET /conversations/{id}` with no `after` parameter is a plain, unconditional read against current projection state - `200` if present, `404` if not - and is never pending, even if the write behind it hasn't been projected yet.
-10. The representation of a conversation includes its id, its resource URL, and its thread (id, title, participants, and messages - each message showing the author's ID, the text, and when it was posted). Superseded by rule 1 of the "thread participants" story: participants is a single field, the union of the original author and recipients, rather than author and recipients being kept as separate fields.
+10. The representation of a conversation includes its id, its resource URL, and its thread (id, title, participants, and messages - each message showing the author's ID, the text, and when it was posted). Superseded by rule 1 of the "thread participants" story: participants is a single field, the union of the original author and recipients, rather than author and recipients being kept as separate fields. Further superseded by rule 9 of "add a thread to a conversation": a conversation's representation is a list of threads, not a single one.
 
 ## Scenarios
 

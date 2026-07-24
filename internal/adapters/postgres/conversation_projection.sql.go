@@ -13,15 +13,16 @@ import (
 
 const appendConversationProjectionMessage = `-- name: AppendConversationProjectionMessage :exec
 INSERT INTO conversation_projection_messages (
-    conversation_id, sequence, author, message_text, posted_at
+    conversation_id, thread_id, sequence, author, message_text, posted_at
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4, $5, $6
 )
 ON CONFLICT (conversation_id, sequence) DO NOTHING
 `
 
 type AppendConversationProjectionMessageParams struct {
 	ConversationID string
+	ThreadID       string
 	Sequence       int64
 	Author         string
 	MessageText    string
@@ -31,6 +32,7 @@ type AppendConversationProjectionMessageParams struct {
 func (q *Queries) AppendConversationProjectionMessage(ctx context.Context, arg AppendConversationProjectionMessageParams) error {
 	_, err := q.db.Exec(ctx, appendConversationProjectionMessage,
 		arg.ConversationID,
+		arg.ThreadID,
 		arg.Sequence,
 		arg.Author,
 		arg.MessageText,
@@ -60,46 +62,59 @@ func (q *Queries) ApplyConversationCreatedProjection(ctx context.Context, arg Ap
 }
 
 const applyThreadStartedProjection = `-- name: ApplyThreadStartedProjection :exec
-UPDATE conversation_projection SET
-    thread_id = $2,
-    thread_title = $3,
-    participants = $4
-WHERE id = $1
+INSERT INTO conversation_projection_threads (
+    id, conversation_id, sequence, title, participants
+) VALUES (
+    $1, $2, $3, $4, $5
+)
 `
 
 type ApplyThreadStartedProjectionParams struct {
-	ID           string
-	ThreadID     pgtype.Text
-	ThreadTitle  pgtype.Text
-	Participants []string
+	ID             string
+	ConversationID string
+	Sequence       int64
+	Title          string
+	Participants   []string
 }
 
+// No ON CONFLICT here, deliberately: (conversation_id, id) is the table's
+// primary key, so a genuine collision - the same thread id landing twice
+// against the same conversation with different data - fails loudly as a
+// unique-violation error instead of silently no-opping.
 func (q *Queries) ApplyThreadStartedProjection(ctx context.Context, arg ApplyThreadStartedProjectionParams) error {
 	_, err := q.db.Exec(ctx, applyThreadStartedProjection,
 		arg.ID,
-		arg.ThreadID,
-		arg.ThreadTitle,
+		arg.ConversationID,
+		arg.Sequence,
+		arg.Title,
 		arg.Participants,
 	)
 	return err
 }
 
+const conversationProjectionExists = `-- name: ConversationProjectionExists :one
+SELECT EXISTS (
+    SELECT 1 FROM conversation_projection_threads WHERE conversation_id = $1
+)
+`
+
+func (q *Queries) ConversationProjectionExists(ctx context.Context, conversationID string) (bool, error) {
+	row := q.db.QueryRow(ctx, conversationProjectionExists, conversationID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getConversationProjection = `-- name: GetConversationProjection :one
-SELECT id, resource_url, thread_id, thread_title, participants
+SELECT id, resource_url
 FROM conversation_projection
-WHERE id = $1 AND thread_id IS NOT NULL
+WHERE id = $1
 `
 
 func (q *Queries) GetConversationProjection(ctx context.Context, id string) (ConversationProjection, error) {
 	row := q.db.QueryRow(ctx, getConversationProjection, id)
 	var i ConversationProjection
-	err := row.Scan(
-		&i.ID,
-		&i.ResourceUrl,
-		&i.ThreadID,
-		&i.ThreadTitle,
-		&i.Participants,
-	)
+	err := row.Scan(&i.ID, &i.ResourceUrl)
 	return i, err
 }
 
@@ -115,28 +130,69 @@ func (q *Queries) GetProjectionCheckpoint(ctx context.Context) (int64, error) {
 }
 
 const listConversationProjectionMessages = `-- name: ListConversationProjectionMessages :many
-SELECT conversation_id, sequence, author, message_text, posted_at
+SELECT thread_id, sequence, author, message_text, posted_at
 FROM conversation_projection_messages
 WHERE conversation_id = $1
 ORDER BY sequence
 `
 
-func (q *Queries) ListConversationProjectionMessages(ctx context.Context, conversationID string) ([]ConversationProjectionMessage, error) {
+type ListConversationProjectionMessagesRow struct {
+	ThreadID    string
+	Sequence    int64
+	Author      string
+	MessageText string
+	PostedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) ListConversationProjectionMessages(ctx context.Context, conversationID string) ([]ListConversationProjectionMessagesRow, error) {
 	rows, err := q.db.Query(ctx, listConversationProjectionMessages, conversationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ConversationProjectionMessage
+	var items []ListConversationProjectionMessagesRow
 	for rows.Next() {
-		var i ConversationProjectionMessage
+		var i ListConversationProjectionMessagesRow
 		if err := rows.Scan(
-			&i.ConversationID,
+			&i.ThreadID,
 			&i.Sequence,
 			&i.Author,
 			&i.MessageText,
 			&i.PostedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listConversationProjectionThreads = `-- name: ListConversationProjectionThreads :many
+SELECT id, title, participants
+FROM conversation_projection_threads
+WHERE conversation_id = $1
+ORDER BY sequence
+`
+
+type ListConversationProjectionThreadsRow struct {
+	ID           string
+	Title        string
+	Participants []string
+}
+
+func (q *Queries) ListConversationProjectionThreads(ctx context.Context, conversationID string) ([]ListConversationProjectionThreadsRow, error) {
+	rows, err := q.db.Query(ctx, listConversationProjectionThreads, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListConversationProjectionThreadsRow
+	for rows.Next() {
+		var i ListConversationProjectionThreadsRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.Participants); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

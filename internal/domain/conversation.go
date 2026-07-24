@@ -127,27 +127,19 @@ func StartConversation(params StartConversationParams) ([]Event, error) {
 	if params.ResourceURL == nil {
 		return nil, ErrResourceURLRequired
 	}
-	if params.ThreadTitle == nil {
-		return nil, ErrThreadTitleRequired
-	}
-	if params.Author == nil {
-		return nil, ErrAuthorRequired
-	}
-	if params.Message == nil {
-		return nil, ErrMessageRequired
-	}
-	if params.Recipients == nil {
-		return nil, ErrRecipientsRequired
-	}
 
-	recipients, err := NewRecipients(*params.Recipients)
+	threadStarted, messagePosted, err := newThread(threadParams{
+		ConversationID: params.ConversationID,
+		ThreadID:       params.ThreadID,
+		MessageID:      params.MessageID,
+		ThreadTitle:    params.ThreadTitle,
+		Author:         params.Author,
+		Recipients:     params.Recipients,
+		Message:        params.Message,
+		OccurredAt:     params.OccurredAt,
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	author := ParticipantID(*params.Author)
-	if recipients.Contains(author) {
-		return nil, ErrAuthorIsRecipient
 	}
 
 	return []Event{
@@ -157,21 +149,73 @@ func StartConversation(params StartConversationParams) ([]Event, error) {
 			ResourceURL:    ResourceURL(*params.ResourceURL),
 			OccurredAt:     params.OccurredAt,
 		},
-		ThreadStarted{
+		threadStarted,
+		messagePosted,
+	}, nil
+}
+
+// threadParams is the shared, not-yet-validated shape a new thread needs -
+// title, author, recipients, opening message - used identically whether
+// the thread is a conversation's first (via StartConversation) or an
+// additional one on an existing conversation (via AddThread). A single
+// struct rather than newThread's own parameter list, per
+// docs/adr/0003-commands-not-parameter-lists.md: two positional *string
+// arguments (threadTitle, author) is exactly the kind of thing a struct's
+// field names make compiler-checked instead of silently reorderable.
+type threadParams struct {
+	ConversationID ConversationID
+	ThreadID       ThreadID
+	MessageID      MessageID
+	ThreadTitle    *string
+	Author         *string
+	Recipients     *[]string
+	Message        *string
+	OccurredAt     time.Time
+}
+
+// newThread validates and builds the ThreadStarted/MessagePosted pair a
+// new thread needs - the required-field checks and the recipients-set/
+// author-exclusion rules are identical whether the thread is a
+// conversation's first (via StartConversation) or an additional one on an
+// existing conversation (via AddThread), so both funnel through here
+// rather than duplicating the checks.
+func newThread(params threadParams) (ThreadStarted, MessagePosted, error) {
+	if params.ThreadTitle == nil {
+		return ThreadStarted{}, MessagePosted{}, ErrThreadTitleRequired
+	}
+	if params.Author == nil {
+		return ThreadStarted{}, MessagePosted{}, ErrAuthorRequired
+	}
+	if params.Message == nil {
+		return ThreadStarted{}, MessagePosted{}, ErrMessageRequired
+	}
+	if params.Recipients == nil {
+		return ThreadStarted{}, MessagePosted{}, ErrRecipientsRequired
+	}
+
+	recipients, err := NewRecipients(*params.Recipients)
+	if err != nil {
+		return ThreadStarted{}, MessagePosted{}, err
+	}
+
+	author := ParticipantID(*params.Author)
+	if recipients.Contains(author) {
+		return ThreadStarted{}, MessagePosted{}, ErrAuthorIsRecipient
+	}
+
+	return ThreadStarted{
 			ConversationID: params.ConversationID,
 			ThreadID:       params.ThreadID,
 			ThreadTitle:    ThreadTitle(*params.ThreadTitle),
 			Author:         author,
 			Recipients:     recipients,
 			OccurredAt:     params.OccurredAt,
-		},
-		MessagePosted{
+		}, MessagePosted{
 			ConversationID: params.ConversationID,
 			ThreadID:       params.ThreadID,
 			MessageID:      params.MessageID,
 			Author:         author,
 			MessageText:    MessageText(*params.Message),
 			OccurredAt:     params.OccurredAt,
-		},
-	}, nil
+		}, nil
 }

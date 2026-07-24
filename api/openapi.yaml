@@ -76,6 +76,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /conversations/{conversationId}/threads:
+    post:
+      operationId: addThread
+      summary: Add a new thread to an existing conversation
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddThreadRequest'
+      responses:
+        '202':
+          description: Accepted - the write is durable but not necessarily reflected in the read model yet
+          headers:
+            Location:
+              description: The conversation this thread belongs to, with an after= cursor for polling until the projection has caught up
+              schema:
+                type: string
+        '400':
+          description: The request is missing a required field, or violates a recipients rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No conversation with this id in the current projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /conversations/{conversationId}/threads/{threadId}/messages:
     post:
       operationId: replyToThread
@@ -166,14 +202,22 @@ components:
       required:
         - id
         - resourceUrl
-        - thread
+        - threads
       properties:
         id:
           type: string
         resourceUrl:
           type: string
-        thread:
-          $ref: '#/components/schemas/Thread'
+        threads:
+          type: array
+          description: >-
+            One entry per thread the conversation has, in creation order:
+            the original thread first, then each added thread in the order
+            it was started (see the "add a thread to a conversation"
+            story) - superseding the single "thread" field a conversation
+            used to expose.
+          items:
+            $ref: '#/components/schemas/Thread'
     Thread:
       type: object
       required:
@@ -212,6 +256,25 @@ components:
         postedAt:
           type: string
           format: date-time
+    AddThreadRequest:
+      type: object
+      description: >-
+        All four fields are required by CE's domain rules, but none are
+        marked required at the schema level - the same posture as
+        StartConversationRequest: a missing key and a present-but-empty
+        value are meaningfully different (see the "add a thread to a
+        conversation" story), so all fields stay optional/pointer here.
+      properties:
+        threadTitle:
+          type: string
+        author:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
     ReplyToThreadRequest:
       type: object
       description: >-

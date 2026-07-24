@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/quii/ce/internal/domain"
@@ -12,11 +13,21 @@ import (
 type Projection struct {
 	mu            sync.Mutex
 	conversations map[domain.ConversationID]domain.ConversationView
-	checkpoint    domain.Sequence
+	// threadSequences records the sequence each conversation's threads
+	// were started at, so Threads can be kept ordered by that sequence
+	// (rule 10 of "add a thread to a conversation") rather than by
+	// whatever order applyThreadStarted happened to be called in - the
+	// same ORDER BY sequence the Postgres adapter reads back with, not an
+	// incidental property of apply-call order.
+	threadSequences map[domain.ConversationID]map[domain.ThreadID]domain.Sequence
+	checkpoint      domain.Sequence
 }
 
 func NewProjection() *Projection {
-	return &Projection{conversations: make(map[domain.ConversationID]domain.ConversationView)}
+	return &Projection{
+		conversations:   make(map[domain.ConversationID]domain.ConversationView),
+		threadSequences: make(map[domain.ConversationID]map[domain.ThreadID]domain.Sequence),
+	}
 }
 
 // Apply applies every entry in the batch, in order, before advancing the
@@ -32,7 +43,7 @@ func (p *Projection) Apply(_ context.Context, entries ...out.OutboxEntry) error 
 		case domain.ConversationCreated:
 			p.applyConversationCreated(e)
 		case domain.ThreadStarted:
-			if err := p.applyThreadStarted(e); err != nil {
+			if err := p.applyThreadStarted(e, entry.Sequence); err != nil {
 				return err
 			}
 		case domain.MessagePosted:
@@ -58,17 +69,35 @@ func (p *Projection) applyConversationCreated(event domain.ConversationCreated) 
 	}
 }
 
-func (p *Projection) applyThreadStarted(event domain.ThreadStarted) error {
+// applyThreadStarted appends a new ThreadView to the conversation's
+// Threads, then re-sorts by the sequence each thread was started at - rule
+// 10 of "add a thread to a conversation" - rather than relying on
+// applyThreadStarted's own call order, which Projection.Apply's contract
+// doesn't actually guarantee matches sequence order for a given
+// conversation across separate batches. This mirrors the Postgres
+// adapter, which stores the sequence explicitly and orders by it at read
+// time (ListConversationProjectionThreads).
+func (p *Projection) applyThreadStarted(event domain.ThreadStarted, seq domain.Sequence) error {
 	view, ok := p.conversations[event.ConversationID]
 	if !ok {
 		return fmt.Errorf("cannot apply thread started for unknown conversation %q", event.ConversationID)
 	}
 
-	view.Thread = domain.ThreadView{
+	sequences, ok := p.threadSequences[event.ConversationID]
+	if !ok {
+		sequences = make(map[domain.ThreadID]domain.Sequence)
+		p.threadSequences[event.ConversationID] = sequences
+	}
+	sequences[event.ThreadID] = seq
+
+	view.Threads = append(view.Threads, domain.ThreadView{
 		ID:           event.ThreadID,
 		Title:        event.ThreadTitle,
 		Participants: event.Participants(),
-	}
+	})
+	sort.SliceStable(view.Threads, func(i, j int) bool {
+		return sequences[view.Threads[i].ID] < sequences[view.Threads[j].ID]
+	})
 	p.conversations[event.ConversationID] = view
 
 	return nil
@@ -80,29 +109,48 @@ func (p *Projection) applyMessagePosted(event domain.MessagePosted) error {
 		return fmt.Errorf("cannot apply message for unknown conversation %q", event.ConversationID)
 	}
 
-	view.Thread.Messages = append(view.Thread.Messages, domain.MessageView{
-		Author:   event.Author,
-		Text:     event.MessageText,
-		PostedAt: event.OccurredAt,
-	})
-	p.conversations[event.ConversationID] = view
+	for i, thread := range view.Threads {
+		if thread.ID != event.ThreadID {
+			continue
+		}
 
-	return nil
+		view.Threads[i].Messages = append(thread.Messages, domain.MessageView{
+			Author:   event.Author,
+			Text:     event.MessageText,
+			PostedAt: event.OccurredAt,
+		})
+		p.conversations[event.ConversationID] = view
+		return nil
+	}
+
+	return fmt.Errorf("cannot apply message for unknown thread %q on conversation %q", event.ThreadID, event.ConversationID)
 }
 
 func (p *Projection) Get(_ context.Context, id domain.ConversationID) (domain.ConversationView, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// A ConversationCreated on its own (ThreadStarted not yet applied)
-	// leaves an entry with a zero-value Thread - not a state any story's
-	// rules give a representation for, so it isn't "found" yet either.
+	// A ConversationCreated on its own (its first ThreadStarted not yet
+	// applied) leaves an entry with no threads at all - not a state any
+	// story's rules give a representation for, so it isn't "found" yet
+	// either.
 	view, ok := p.conversations[id]
-	if !ok || view.Thread.ID == "" {
+	if !ok || len(view.Threads) == 0 {
 		return domain.ConversationView{}, domain.ErrConversationNotFound
 	}
 
 	return view, nil
+}
+
+// Exists reports whether a conversation is currently readable - the same
+// "has at least one thread" test Get's not-found check uses, without
+// building the full ConversationView Get returns.
+func (p *Projection) Exists(_ context.Context, id domain.ConversationID) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	view, ok := p.conversations[id]
+	return ok && len(view.Threads) > 0, nil
 }
 
 func (p *Projection) Checkpoint(_ context.Context) (domain.Sequence, error) {

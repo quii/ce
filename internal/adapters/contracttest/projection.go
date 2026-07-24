@@ -28,6 +28,8 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		assert.ErrorIs(t, err, domain.ErrConversationNotFound, "Get(unknown)")
 	})
 
+	projectionExistsTests(t, newProjection)
+
 	// A ConversationCreated event on its own describes a conversation with
 	// no thread yet - not a state any of this codebase's rules give a
 	// representation for (every completed story's Conversation always has
@@ -70,9 +72,10 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		view, err := projection.Get(ctx, created.ConversationID)
 		assert.NoErr(t, err, "Get")
 		assert.Equal(t, view.ResourceURL, created.ResourceURL, "Get().ResourceURL")
-		assert.Equal(t, view.Thread.Title, threadStarted.ThreadTitle, "Get().Thread.Title")
-		assert.Len(t, view.Thread.Messages, 1, "Get().Thread.Messages")
-		assert.Equal(t, view.Thread.Messages[0].Author, messagePosted.Author, "Get().Thread.Messages[0].Author")
+		assert.Len(t, view.Threads, 1, "Get().Threads")
+		assert.Equal(t, view.Threads[0].Title, threadStarted.ThreadTitle, "Get().Threads[0].Title")
+		assert.Len(t, view.Threads[0].Messages, 1, "Get().Threads[0].Messages")
+		assert.Equal(t, view.Threads[0].Messages[0].Author, messagePosted.Author, "Get().Threads[0].Messages[0].Author")
 
 		checkpoint, err := projection.Checkpoint(ctx)
 		assert.NoErr(t, err, "Checkpoint")
@@ -117,14 +120,16 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 
 		view, err := projection.Get(ctx, created.ConversationID)
 		assert.NoErr(t, err, "Get")
-		assert.Equal(t, view.Thread.Title, threadStarted.ThreadTitle, "Get().Thread.Title (unchanged by the reply)")
-		assert.Equal(t, view.Thread.Participants, threadStarted.Participants(), "Get().Thread.Participants (unchanged by the reply)")
-		assert.Len(t, view.Thread.Messages, 2, "Get().Thread.Messages (the opening message plus the reply)")
-		assert.Equal(t, view.Thread.Messages[0].Author, opening.Author, "Get().Thread.Messages[0].Author (the opening author)")
-		assert.Equal(t, view.Thread.Messages[1].Author, reply.Author, "Get().Thread.Messages[1].Author (the replying author)")
+		assert.Equal(t, view.Threads[0].Title, threadStarted.ThreadTitle, "Get().Threads[0].Title (unchanged by the reply)")
+		assert.Equal(t, view.Threads[0].Participants, threadStarted.Participants(), "Get().Threads[0].Participants (unchanged by the reply)")
+		assert.Len(t, view.Threads[0].Messages, 2, "Get().Threads[0].Messages (the opening message plus the reply)")
+		assert.Equal(t, view.Threads[0].Messages[0].Author, opening.Author, "Get().Threads[0].Messages[0].Author (the opening author)")
+		assert.Equal(t, view.Threads[0].Messages[1].Author, reply.Author, "Get().Threads[0].Messages[1].Author (the replying author)")
 
 		checkpoint, err := projection.Checkpoint(ctx)
 		assert.NoErr(t, err, "Checkpoint")
 		assert.Equal(t, checkpoint, domain.Sequence(4), "Checkpoint() after applying the batch plus one more event")
 	})
+
+	projectionThreadTests(t, newProjection)
 }

@@ -10,7 +10,17 @@ import (
 	"github.com/quii/ce/internal/ports/in"
 )
 
-func startThreadAndCatchUp(t *testing.T, driver ThreadReplyDriver, author string, recipients []string, message string) (conversationID, threadID string) {
+// conversationRelayDriver is the minimal shape drainAndWait/
+// startThreadAndCatchUp need - a real, already-projected conversation to
+// target, regardless of which specific in-port (ThreadReplier, ThreadAdder)
+// a given specification is otherwise driving. Both ThreadReplyDriver and
+// ThreadAddDriver satisfy it.
+type conversationRelayDriver interface {
+	ConversationDriver
+	in.Relay
+}
+
+func startThreadAndCatchUp(t *testing.T, driver conversationRelayDriver, author string, recipients []string, message string) (conversationID, threadID string) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -25,7 +35,7 @@ func startThreadAndCatchUp(t *testing.T, driver ThreadReplyDriver, author string
 
 	view := drainAndWait(t, driver, string(started.ConversationID), started.Sequence)
 
-	return string(started.ConversationID), string(view.Thread.ID)
+	return string(started.ConversationID), string(view.Threads[0].ID)
 }
 
 func reply(t *testing.T, driver ThreadReplyDriver, conversationID, threadID, author, message string) (in.ReplyToThreadResult, error) {
@@ -39,7 +49,7 @@ func reply(t *testing.T, driver ThreadReplyDriver, conversationID, threadID, aut
 	})
 }
 
-func drainAndWait(t *testing.T, driver ThreadReplyDriver, conversationID string, seq domain.Sequence) domain.ConversationView {
+func drainAndWait(t *testing.T, driver conversationRelayDriver, conversationID string, seq domain.Sequence) domain.ConversationView {
 	t.Helper()
 	ctx := context.Background()
 
@@ -74,16 +84,47 @@ func assertReplyNotFound(t *testing.T, err error) {
 	}
 }
 
+// assertMessagesInOrder checks the conversation's first thread's messages -
+// see assertThreadMessages, the single shared implementation every
+// specification's message-list assertion funnels through.
 func assertMessagesInOrder(t *testing.T, view httpConversationView, want []wantMessage) {
 	t.Helper()
 
-	got := make([]wantMessage, len(view.Thread.Messages))
-	for i, m := range view.Thread.Messages {
+	assertThreadMessages(t, view.firstThread(), want)
+}
+
+// assertThreadMessages checks a specific thread's messages exactly match
+// want, in order, and that every message has a real (non-zero) PostedAt -
+// the one place any specification's message-list assertion is
+// implemented, whether it's checking the conversation's first thread
+// (assertMessagesInOrder, assertMessages) or one a specific thread further
+// down the list (AddThreadSpecification, which has to assert against
+// view.Threads[1] and beyond).
+func assertThreadMessages(t *testing.T, thread domain.ThreadView, want []wantMessage) {
+	t.Helper()
+
+	got := make([]wantMessage, len(thread.Messages))
+	for i, m := range thread.Messages {
 		got[i] = wantMessage{Author: string(m.Author), Text: string(m.Text)}
 	}
 	assert.Equal(t, got, want, "Thread.Messages")
 
-	for i, m := range view.Thread.Messages {
-		assert.False(t, m.PostedAt.IsZero(), "Messages[%d].PostedAt is zero, want a real timestamp", i)
+	for i, m := range thread.Messages {
+		assert.False(t, m.PostedAt.IsZero(), "Thread.Messages[%d].PostedAt is zero, want a real timestamp", i)
+	}
+}
+
+// assertThreadParticipants checks membership rather than positional
+// equality - ThreadView.Participants has no guaranteed order (rule 4 of
+// "thread participants") - against a specific thread, the one place any
+// specification's participants assertion is implemented (assertParticipants
+// delegates here for the conversation's first thread; AddThreadSpecification
+// calls it directly for a thread further down the list).
+func assertThreadParticipants(t *testing.T, thread domain.ThreadView, want []string) {
+	t.Helper()
+
+	assert.Len(t, thread.Participants, len(want), "Thread.Participants")
+	for _, id := range want {
+		assert.Contains(t, thread.Participants, domain.ParticipantID(id), "Thread.Participants")
 	}
 }

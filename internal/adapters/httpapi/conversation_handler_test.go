@@ -20,6 +20,12 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 		Clock:  memory.NewClock(),
 		Events: events,
 	})
+	adder := in.NewAddThreadUseCase(in.AddThreadDependencies{
+		IDs:        memory.NewIDGenerator(),
+		Clock:      memory.NewClock(),
+		Events:     events,
+		Projection: projection,
+	})
 	replier := in.NewReplyToThreadUseCase(in.ReplyToThreadDependencies{
 		IDs:        memory.NewIDGenerator(),
 		Clock:      memory.NewClock(),
@@ -28,7 +34,7 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 	})
 	getter := in.NewGetConversationUseCase(projection)
 
-	return httpapi.NewConversationHandler(starter, replier, getter)
+	return httpapi.NewConversationHandler(starter, adder, replier, getter)
 }
 
 func strPtr(s string) *string { return &s }
@@ -48,6 +54,41 @@ func TestConversationHandler_StartConversation_MissingResourceURLIsRejected(t *t
 
 	_, ok := got.(httpapi.StartConversation400JSONResponse)
 	assert.True(t, ok, "StartConversation with no resourceUrl = %#v, want a StartConversation400JSONResponse", got)
+}
+
+func TestConversationHandler_AddThread_MissingAuthorIsRejected(t *testing.T) {
+	handler := conversationHandler(t)
+
+	got, err := handler.AddThread(context.Background(), httpapi.AddThreadRequestObject{
+		ConversationId: "conversation-1",
+		Body: &httpapi.AddThreadJSONRequestBody{
+			ThreadTitle: strPtr("Delivery date"),
+			Recipients:  &[]string{"user-4"},
+			Message:     strPtr("When will this ship?"),
+		},
+	})
+	assert.NoErr(t, err, "AddThread")
+
+	_, ok := got.(httpapi.AddThread400JSONResponse)
+	assert.True(t, ok, "AddThread with no author = %#v, want an AddThread400JSONResponse", got)
+}
+
+func TestConversationHandler_AddThread_UnknownConversationIs404(t *testing.T) {
+	handler := conversationHandler(t)
+
+	got, err := handler.AddThread(context.Background(), httpapi.AddThreadRequestObject{
+		ConversationId: "does-not-exist",
+		Body: &httpapi.AddThreadJSONRequestBody{
+			ThreadTitle: strPtr("Delivery date"),
+			Author:      strPtr("user-3"),
+			Recipients:  &[]string{"user-4"},
+			Message:     strPtr("When will this ship?"),
+		},
+	})
+	assert.NoErr(t, err, "AddThread")
+
+	_, ok := got.(httpapi.AddThread404JSONResponse)
+	assert.True(t, ok, "AddThread(%q) = %#v, want an AddThread404JSONResponse", "does-not-exist", got)
 }
 
 func TestConversationHandler_ReplyToThread_MissingAuthorIsRejected(t *testing.T) {

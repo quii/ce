@@ -50,10 +50,6 @@ func toTimestamptz(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
-func toNullableText(s string) pgtype.Text {
-	return pgtype.Text{String: s, Valid: true}
-}
-
 // conversationCreatedPayload/threadStartedPayload/messagePostedPayload are
 // the small, adapter-local JSON shapes stored in conversation_events'/
 // conversation_outbox's payload column - just the fields specific to

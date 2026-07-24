@@ -26,11 +26,8 @@ type ConversationOutbox struct {
 }
 
 type ConversationProjection struct {
-	ID           string
-	ResourceUrl  string
-	ThreadID     pgtype.Text
-	ThreadTitle  pgtype.Text
-	Participants []string
+	ID          string
+	ResourceUrl string
 }
 
 type ConversationProjectionMessage struct {
@@ -39,6 +36,15 @@ type ConversationProjectionMessage struct {
 	Author         string
 	MessageText    string
 	PostedAt       pgtype.Timestamptz
+	ThreadID       string
+}
+
+type ConversationProjectionThread struct {
+	ID             string
+	ConversationID string
+	Sequence       int64
+	Title          string
+	Participants   []string
 }
 
 type ProjectionCheckpoint struct {
