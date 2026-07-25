@@ -18,7 +18,7 @@ import (
 // same contract test, per docs/adr/0009-contract-tests.md.
 type EventStore struct {
 	mu      sync.Mutex
-	events  []domain.Event
+	records []domain.EventRecord
 	pending map[domain.Sequence]domain.Event
 }
 
@@ -32,12 +32,47 @@ func (s *EventStore) Append(_ context.Context, events ...domain.Event) (domain.S
 
 	var seq domain.Sequence
 	for _, event := range events {
-		s.events = append(s.events, event)
-		seq = domain.Sequence(len(s.events))
+		seq = domain.Sequence(len(s.records) + 1)
+		s.records = append(s.records, domain.EventRecord{Sequence: seq, Event: event})
 		s.pending[seq] = event
 	}
 
 	return seq, nil
+}
+
+// ListByConversation scans every appended event in order - a single
+// unfiltered slice is exactly what a fake backing a single-process test
+// needs, unlike internal/adapters/postgres.Store, which can push the
+// conversation_id filter down into the query itself.
+func (s *EventStore) ListByConversation(_ context.Context, id domain.ConversationID) ([]domain.EventRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var records []domain.EventRecord
+	for _, record := range s.records {
+		if conversationIDOf(record.Event) == id {
+			records = append(records, record)
+		}
+	}
+
+	return records, nil
+}
+
+// conversationIDOf extracts the ConversationID every domain.Event variant
+// carries - a type switch rather than an interface method, mirroring
+// internal/adapters/postgres/store.go's marshalEvent, since Event's own
+// sealed interface (event.go) deliberately exposes nothing beyond isEvent.
+func conversationIDOf(event domain.Event) domain.ConversationID {
+	switch e := event.(type) {
+	case domain.ConversationCreated:
+		return e.ConversationID
+	case domain.ThreadStarted:
+		return e.ConversationID
+	case domain.MessagePosted:
+		return e.ConversationID
+	default:
+		return ""
+	}
 }
 
 func (s *EventStore) Enqueue(_ context.Context, seq domain.Sequence, event domain.Event) error {

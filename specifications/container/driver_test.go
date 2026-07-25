@@ -61,6 +61,12 @@ func TestAddThread(t *testing.T) {
 	specifications.AddThreadSpecification(t, driver)
 }
 
+func TestListConversationEvents(t *testing.T) {
+	driver := container.New(apiBaseURL)
+
+	specifications.ListConversationEventsSpecification(t, driver)
+}
+
 func TestAPIDocs(t *testing.T) {
 	t.Run("serves the OpenAPI spec", func(t *testing.T) {
 		body := get(t, apiBaseURL+"/openapi.yaml")

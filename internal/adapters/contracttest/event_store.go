@@ -58,6 +58,63 @@ func EventStore(t *testing.T, newStore func() out.EventStore) {
 		assert.NoErr(t, err, "Append(batch of two events)")
 		assert.Equal(t, last, first+2, "Append(batch)'s sequence (two more than the first Append's sequence %d, since the batch has two events)", first)
 	})
+
+	t.Run("listing events for a conversation returns them in append order", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		created := sampleConversationCreated("conversation-1")
+		threadStarted := sampleThreadStarted("conversation-1", "thread-1")
+		messagePosted := sampleMessagePosted("conversation-1", "thread-1", "message-1")
+
+		_, err := store.Append(ctx, created, threadStarted, messagePosted)
+		assert.NoErr(t, err, "Append(batch of three events)")
+
+		records, err := store.ListByConversation(ctx, domain.ConversationID("conversation-1"))
+		assert.NoErr(t, err, "ListByConversation")
+		assert.Len(t, records, 3, "ListByConversation")
+
+		wantSequences := []domain.Sequence{1, 2, 3}
+		gotSequences := make([]domain.Sequence, len(records))
+		for i, record := range records {
+			gotSequences[i] = record.Sequence
+		}
+		assert.Equal(t, gotSequences, wantSequences, "ListByConversation sequence order")
+
+		_, ok := records[0].Event.(domain.ConversationCreated)
+		assert.True(t, ok, "ListByConversation()[0].Event = %#v, want a domain.ConversationCreated", records[0].Event)
+		_, ok = records[1].Event.(domain.ThreadStarted)
+		assert.True(t, ok, "ListByConversation()[1].Event = %#v, want a domain.ThreadStarted", records[1].Event)
+		_, ok = records[2].Event.(domain.MessagePosted)
+		assert.True(t, ok, "ListByConversation()[2].Event = %#v, want a domain.MessagePosted", records[2].Event)
+	})
+
+	t.Run("listing events only returns events belonging to the requested conversation", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		_, err := store.Append(ctx, sampleConversationCreated("conversation-1"))
+		assert.NoErr(t, err, "Append(conversation-1)")
+		_, err = store.Append(ctx, sampleConversationCreated("conversation-2"))
+		assert.NoErr(t, err, "Append(conversation-2)")
+
+		records, err := store.ListByConversation(ctx, domain.ConversationID("conversation-2"))
+		assert.NoErr(t, err, "ListByConversation")
+		assert.Len(t, records, 1, "ListByConversation(conversation-2)")
+
+		got, ok := records[0].Event.(domain.ConversationCreated)
+		assert.True(t, ok, "ListByConversation(conversation-2)[0].Event = %#v, want a domain.ConversationCreated", records[0].Event)
+		assert.Equal(t, got.ConversationID, domain.ConversationID("conversation-2"), "ListByConversation(conversation-2)[0].Event.ConversationID")
+	})
+
+	t.Run("listing events for a conversation that has never had an event appended returns an empty list", func(t *testing.T) {
+		store := newStore()
+		ctx := context.Background()
+
+		records, err := store.ListByConversation(ctx, domain.ConversationID("missing-conversation"))
+		assert.NoErr(t, err, "ListByConversation")
+		assert.Len(t, records, 0, "ListByConversation(missing-conversation)")
+	})
 }
 
 // EventStoreOutbox is the combination out.EventStore and out.Outbox that

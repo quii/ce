@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/in"
@@ -14,10 +15,11 @@ type ConversationHandler struct {
 	adder   in.ThreadAdder
 	replier in.ThreadReplier
 	getter  in.ConversationGetter
+	lister  in.EventLister
 }
 
-func NewConversationHandler(starter in.ConversationStarter, adder in.ThreadAdder, replier in.ThreadReplier, getter in.ConversationGetter) *ConversationHandler {
-	return &ConversationHandler{starter: starter, adder: adder, replier: replier, getter: getter}
+func NewConversationHandler(starter in.ConversationStarter, adder in.ThreadAdder, replier in.ThreadReplier, getter in.ConversationGetter, lister in.EventLister) *ConversationHandler {
+	return &ConversationHandler{starter: starter, adder: adder, replier: replier, getter: getter, lister: lister}
 }
 
 func (h *ConversationHandler) StartConversation(ctx context.Context, request StartConversationRequestObject) (StartConversationResponseObject, error) {
@@ -117,6 +119,75 @@ func (h *ConversationHandler) GetConversation(ctx context.Context, request GetCo
 	}
 
 	return GetConversation200JSONResponse(toConversation(view)), nil
+}
+
+func (h *ConversationHandler) ListConversationEvents(ctx context.Context, request ListConversationEventsRequestObject) (ListConversationEventsResponseObject, error) {
+	records, err := h.lister.ListConversationEvents(ctx, in.ListConversationEventsCommand{ConversationID: request.ConversationId})
+	if err != nil {
+		if errors.Is(err, domain.ErrConversationNotFound) {
+			return ListConversationEvents404JSONResponse{Message: err.Error()}, nil
+		}
+		return nil, err
+	}
+
+	events := make([]Event, len(records))
+	for i, record := range records {
+		events[i] = toEvent(record)
+	}
+
+	return ListConversationEvents200JSONResponse(events), nil
+}
+
+func toEvent(record domain.EventRecord) Event {
+	event := Event{
+		Sequence:   int64(record.Sequence),
+		Type:       record.Event.TypeName(),
+		OccurredAt: eventOccurredAt(record.Event),
+	}
+
+	switch e := record.Event.(type) {
+	case domain.ConversationCreated:
+		creator := string(e.Creator)
+		resourceURL := string(e.ResourceURL)
+		event.Creator = &creator
+		event.ResourceUrl = &resourceURL
+	case domain.ThreadStarted:
+		threadID := string(e.ThreadID)
+		threadTitle := string(e.ThreadTitle)
+		author := string(e.Author)
+		recipients := make([]string, len(e.Recipients))
+		for i, r := range e.Recipients {
+			recipients[i] = string(r)
+		}
+		event.ThreadId = &threadID
+		event.ThreadTitle = &threadTitle
+		event.Author = &author
+		event.Recipients = &recipients
+	case domain.MessagePosted:
+		threadID := string(e.ThreadID)
+		messageID := string(e.MessageID)
+		author := string(e.Author)
+		messageText := string(e.MessageText)
+		event.ThreadId = &threadID
+		event.MessageId = &messageID
+		event.Author = &author
+		event.MessageText = &messageText
+	}
+
+	return event
+}
+
+func eventOccurredAt(event domain.Event) time.Time {
+	switch e := event.(type) {
+	case domain.ConversationCreated:
+		return e.OccurredAt
+	case domain.ThreadStarted:
+		return e.OccurredAt
+	case domain.MessagePosted:
+		return e.OccurredAt
+	default:
+		return time.Time{}
+	}
 }
 
 func toConversation(view domain.ConversationView) Conversation {

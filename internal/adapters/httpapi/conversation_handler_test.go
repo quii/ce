@@ -33,8 +33,9 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 		Projection: projection,
 	})
 	getter := in.NewGetConversationUseCase(projection)
+	lister := in.NewListConversationEventsUseCase(events)
 
-	return httpapi.NewConversationHandler(starter, adder, replier, getter)
+	return httpapi.NewConversationHandler(starter, adder, replier, getter, lister)
 }
 
 func strPtr(s string) *string { return &s }
@@ -122,6 +123,16 @@ func TestConversationHandler_ReplyToThread_UnknownConversationIs404(t *testing.T
 
 	_, ok := got.(httpapi.ReplyToThread404JSONResponse)
 	assert.True(t, ok, "ReplyToThread(%q) = %#v, want a ReplyToThread404JSONResponse", "does-not-exist", got)
+}
+
+func TestConversationHandler_ListConversationEvents_UnknownIDIs404(t *testing.T) {
+	handler := conversationHandler(t)
+
+	got, err := handler.ListConversationEvents(context.Background(), httpapi.ListConversationEventsRequestObject{ConversationId: "does-not-exist"})
+	assert.NoErr(t, err, "ListConversationEvents")
+
+	_, ok := got.(httpapi.ListConversationEvents404JSONResponse)
+	assert.True(t, ok, "ListConversationEvents(%q) = %#v, want a ListConversationEvents404JSONResponse", "does-not-exist", got)
 }
 
 func TestConversationHandler_GetConversation_UnknownIDIs404(t *testing.T) {

@@ -20,6 +20,7 @@ type conversationDriver struct {
 	in.ThreadAdder
 	in.ThreadReplier
 	in.ConversationGetter
+	in.EventLister
 	in.Relay
 }
 
@@ -46,6 +47,7 @@ func newConversationDriver() conversationDriver {
 			Projection: projection,
 		}),
 		ConversationGetter: in.NewGetConversationUseCase(projection),
+		EventLister:        in.NewListConversationEventsUseCase(events),
 		Relay:              in.NewRelay(events, projection),
 	}
 }
@@ -64,4 +66,8 @@ func TestReplyToThread(t *testing.T) {
 
 func TestAddThread(t *testing.T) {
 	specifications.AddThreadSpecification(t, newConversationDriver())
+}
+
+func TestListConversationEvents(t *testing.T) {
+	specifications.ListConversationEventsSpecification(t, newConversationDriver())
 }

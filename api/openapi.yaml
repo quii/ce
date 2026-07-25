@@ -112,6 +112,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /conversations/{conversationId}/events:
+    get:
+      operationId: listConversationEvents
+      summary: List every event raised for a conversation, in append order
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: >-
+            The conversation's full event history, oldest first - read
+            straight from the append-only event store, not the projection,
+            so a just-appended event is visible here immediately, with no
+            202-pending state (see the "list a conversation's events"
+            story).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+        '404':
+          description: No conversation with this id has ever had an event appended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /conversations/{conversationId}/threads/{threadId}/messages:
     post:
       operationId: replyToThread
@@ -275,6 +305,53 @@ components:
             type: string
         message:
           type: string
+    Event:
+      type: object
+      description: >-
+        One flat shape reused across all three event kinds (see the "list
+        a conversation's events" story, rule 5) - only the fields relevant
+        to type are populated, the rest omitted entirely rather than sent
+        as null/empty.
+      required:
+        - sequence
+        - type
+        - occurredAt
+      properties:
+        sequence:
+          type: integer
+          format: int64
+        type:
+          type: string
+          description: 'The event''s kind: "ConversationCreated", "ThreadStarted" or "MessagePosted".'
+        occurredAt:
+          type: string
+          format: date-time
+        creator:
+          type: string
+          description: Populated for a ConversationCreated event.
+        resourceUrl:
+          type: string
+          description: Populated for a ConversationCreated event.
+        threadId:
+          type: string
+          description: Populated for a ThreadStarted or MessagePosted event.
+        threadTitle:
+          type: string
+          description: Populated for a ThreadStarted event.
+        author:
+          type: string
+          description: Populated for a ThreadStarted or MessagePosted event.
+        recipients:
+          type: array
+          items:
+            type: string
+          description: Populated for a ThreadStarted event.
+        messageId:
+          type: string
+          description: Populated for a MessagePosted event.
+        messageText:
+          type: string
+          description: Populated for a MessagePosted event.
     ReplyToThreadRequest:
       type: object
       description: >-

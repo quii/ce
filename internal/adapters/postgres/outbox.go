@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/out"
 )
@@ -42,7 +44,7 @@ func (s *Store) Pending(ctx context.Context) ([]out.OutboxEntry, error) {
 
 	entries := make([]out.OutboxEntry, len(rows))
 	for i, row := range rows {
-		event, err := toDomainEvent(row)
+		event, err := toDomainEvent(row.Sequence, row.EventType, row.ConversationID, row.OccurredAt, row.Payload)
 		if err != nil {
 			return nil, err
 		}
@@ -56,48 +58,54 @@ func (s *Store) Pending(ctx context.Context) ([]out.OutboxEntry, error) {
 }
 
 // toDomainEvent switches on event_type - there's no way around needing to
-// know the target type before unmarshalling the payload column.
-func toDomainEvent(row ListPendingOutboxEntriesRow) (domain.Event, error) {
-	switch row.EventType {
+// know the target type before unmarshalling the payload column. Takes the
+// shared columns as plain values rather than a specific sqlc-generated row
+// type, since conversation_events and conversation_outbox both store the
+// same shape (event_type, conversation_id, occurred_at, payload) under
+// different generated Go types - shared here (event_store.go's
+// ListByConversation and this file's Pending both call it) rather than
+// duplicating the switch/unmarshal per row type.
+func toDomainEvent(sequence int64, eventType, conversationID string, occurredAt pgtype.Timestamptz, payload []byte) (domain.Event, error) {
+	switch eventType {
 	case eventTypeConversationCreated:
-		var payload conversationCreatedPayload
-		if err := json.Unmarshal(row.Payload, &payload); err != nil {
-			return nil, fmt.Errorf("could not unmarshal ConversationCreated payload for outbox sequence %d: %w", row.Sequence, err)
+		var p conversationCreatedPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, fmt.Errorf("could not unmarshal ConversationCreated payload for sequence %d: %w", sequence, err)
 		}
 		return domain.ConversationCreated{
-			ConversationID: domain.ConversationID(row.ConversationID),
-			Creator:        domain.CreatorID(payload.Creator),
-			ResourceURL:    domain.ResourceURL(payload.ResourceURL),
-			OccurredAt:     row.OccurredAt.Time,
+			ConversationID: domain.ConversationID(conversationID),
+			Creator:        domain.CreatorID(p.Creator),
+			ResourceURL:    domain.ResourceURL(p.ResourceURL),
+			OccurredAt:     occurredAt.Time,
 		}, nil
 	case eventTypeThreadStarted:
-		var payload threadStartedPayload
-		if err := json.Unmarshal(row.Payload, &payload); err != nil {
-			return nil, fmt.Errorf("could not unmarshal ThreadStarted payload for outbox sequence %d: %w", row.Sequence, err)
+		var p threadStartedPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, fmt.Errorf("could not unmarshal ThreadStarted payload for sequence %d: %w", sequence, err)
 		}
 		return domain.ThreadStarted{
-			ConversationID: domain.ConversationID(row.ConversationID),
-			ThreadID:       domain.ThreadID(payload.ThreadID),
-			ThreadTitle:    domain.ThreadTitle(payload.ThreadTitle),
-			Author:         domain.ParticipantID(payload.Author),
-			Recipients:     stringsToRecipients(payload.Recipients),
-			OccurredAt:     row.OccurredAt.Time,
+			ConversationID: domain.ConversationID(conversationID),
+			ThreadID:       domain.ThreadID(p.ThreadID),
+			ThreadTitle:    domain.ThreadTitle(p.ThreadTitle),
+			Author:         domain.ParticipantID(p.Author),
+			Recipients:     stringsToRecipients(p.Recipients),
+			OccurredAt:     occurredAt.Time,
 		}, nil
 	case eventTypeMessagePosted:
-		var payload messagePostedPayload
-		if err := json.Unmarshal(row.Payload, &payload); err != nil {
-			return nil, fmt.Errorf("could not unmarshal MessagePosted payload for outbox sequence %d: %w", row.Sequence, err)
+		var p messagePostedPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, fmt.Errorf("could not unmarshal MessagePosted payload for sequence %d: %w", sequence, err)
 		}
 		return domain.MessagePosted{
-			ConversationID: domain.ConversationID(row.ConversationID),
-			ThreadID:       domain.ThreadID(payload.ThreadID),
-			MessageID:      domain.MessageID(payload.MessageID),
-			Author:         domain.ParticipantID(payload.Author),
-			MessageText:    domain.MessageText(payload.MessageText),
-			OccurredAt:     row.OccurredAt.Time,
+			ConversationID: domain.ConversationID(conversationID),
+			ThreadID:       domain.ThreadID(p.ThreadID),
+			MessageID:      domain.MessageID(p.MessageID),
+			Author:         domain.ParticipantID(p.Author),
+			MessageText:    domain.MessageText(p.MessageText),
+			OccurredAt:     occurredAt.Time,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unrecognized event_type %q for outbox sequence %d", row.EventType, row.Sequence)
+		return nil, fmt.Errorf("unrecognized event_type %q for sequence %d", eventType, sequence)
 	}
 }
 

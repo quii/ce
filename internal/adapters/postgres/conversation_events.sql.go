@@ -38,3 +38,36 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (int64
 	err := row.Scan(&sequence)
 	return sequence, err
 }
+
+const listConversationEvents = `-- name: ListConversationEvents :many
+SELECT sequence, event_type, conversation_id, occurred_at, payload
+FROM conversation_events
+WHERE conversation_id = $1
+ORDER BY sequence
+`
+
+func (q *Queries) ListConversationEvents(ctx context.Context, conversationID string) ([]ConversationEvent, error) {
+	rows, err := q.db.Query(ctx, listConversationEvents, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ConversationEvent
+	for rows.Next() {
+		var i ConversationEvent
+		if err := rows.Scan(
+			&i.Sequence,
+			&i.EventType,
+			&i.ConversationID,
+			&i.OccurredAt,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

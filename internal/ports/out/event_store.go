@@ -14,6 +14,14 @@ import (
 // last event in the batch, sufficient for a caller waiting on the whole
 // write to have landed, since the earlier events in the same batch are
 // guaranteed to have committed first.
+//
+// ListByConversation reads straight from the log itself, in ascending
+// sequence order (append order) - unlike out.Projection, there's no
+// checkpoint/catch-up mechanic to wait on here, since the event store is
+// the write side, not a read model the relay populates asynchronously. An
+// empty result means the conversation has never had an event appended -
+// see "list a conversation's events" rule 2.
 type EventStore interface {
 	Append(ctx context.Context, events ...domain.Event) (domain.Sequence, error)
+	ListByConversation(ctx context.Context, id domain.ConversationID) ([]domain.EventRecord, error)
 }

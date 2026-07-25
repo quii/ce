@@ -17,10 +17,30 @@ package domain
 // there's no representable "neither" or "several at once" the way a
 // struct of nillable pointer fields would allow, and nothing downstream
 // needs a broader event-bus abstraction than that.
+//
+// TypeName names which variant a given Event is - "ConversationCreated",
+// "ThreadStarted", "MessagePosted" - the one place that naming lives, so a
+// caller that needs it (e.g. "list a conversation's events" rule 5) never
+// has to re-derive it with its own type switch.
 type Event interface {
 	isEvent()
+	TypeName() string
 }
 
 func (ConversationCreated) isEvent() {}
 func (ThreadStarted) isEvent()       {}
 func (MessagePosted) isEvent()       {}
+
+func (ConversationCreated) TypeName() string { return "ConversationCreated" }
+func (ThreadStarted) TypeName() string       { return "ThreadStarted" }
+func (MessagePosted) TypeName() string       { return "MessagePosted" }
+
+// EventRecord pairs an event with the sequence it was appended at -
+// Sequence is assigned by the store when an event is appended
+// (docs/adr/0019-event-sourcing-transactional-outbox.md), not carried by
+// the event itself, so a caller listing a conversation's full history
+// needs the pairing, not just the bare event.
+type EventRecord struct {
+	Sequence Sequence
+	Event    Event
+}
