@@ -55,6 +55,13 @@ func TestStore_Contract(t *testing.T) {
 			return postgres.NewStore(pool)
 		})
 	})
+
+	t.Run("ProjectionByParticipant", func(t *testing.T) {
+		contracttest.ProjectionByParticipant(t, func() out.Projection {
+			truncate(t, pool)
+			return postgres.NewStore(pool)
+		})
+	})
 }
 
 func truncate(t *testing.T, pool *pgxpool.Pool) {

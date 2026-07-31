@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/quii/ce/internal/domain"
 	"github.com/quii/ce/internal/ports/out"
@@ -20,6 +21,10 @@ type Projection struct {
 	// same ORDER BY sequence the Postgres adapter reads back with, not an
 	// incidental property of apply-call order.
 	threadSequences map[domain.ConversationID]map[domain.ThreadID]domain.Sequence
+	// latestMessageAt records the latest message timestamp per thread,
+	// used to sort conversations by most-recently-active for
+	// GetByParticipant (rule 3 of "get conversations by participant").
+	latestMessageAt map[domain.ThreadID]time.Time
 	checkpoint      domain.Sequence
 }
 
@@ -27,6 +32,7 @@ func NewProjection() *Projection {
 	return &Projection{
 		conversations:   make(map[domain.ConversationID]domain.ConversationView),
 		threadSequences: make(map[domain.ConversationID]map[domain.ThreadID]domain.Sequence),
+		latestMessageAt: make(map[domain.ThreadID]time.Time),
 	}
 }
 
@@ -120,6 +126,11 @@ func (p *Projection) applyMessagePosted(event domain.MessagePosted) error {
 			PostedAt: event.OccurredAt,
 		})
 		p.conversations[event.ConversationID] = view
+
+		if event.OccurredAt.After(p.latestMessageAt[event.ThreadID]) {
+			p.latestMessageAt[event.ThreadID] = event.OccurredAt
+		}
+
 		return nil
 	}
 
@@ -140,6 +151,55 @@ func (p *Projection) Get(_ context.Context, id domain.ConversationID) (domain.Co
 	}
 
 	return view, nil
+}
+
+// GetByParticipant returns all conversations the participant appears in,
+// with threads filtered to those the participant is part of, ordered by
+// most-recently-active first (rule 3 of "get conversations by participant").
+func (p *Projection) GetByParticipant(_ context.Context, id domain.ParticipantID) ([]domain.ConversationView, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	type entry struct {
+		view      domain.ConversationView
+		latestAt  time.Time
+	}
+
+	var entries []entry
+	for _, conv := range p.conversations {
+		var filtered []domain.ThreadView
+		var latest time.Time
+		for _, thread := range conv.Threads {
+			if !thread.HasParticipant(id) {
+				continue
+			}
+			filtered = append(filtered, thread)
+			if t := p.latestMessageAt[thread.ID]; t.After(latest) {
+				latest = t
+			}
+		}
+		if len(filtered) == 0 {
+			continue
+		}
+		entries = append(entries, entry{
+			view: domain.ConversationView{
+				ID:          conv.ID,
+				ResourceURL: conv.ResourceURL,
+				Threads:     filtered,
+			},
+			latestAt: latest,
+		})
+	}
+
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].latestAt.After(entries[j].latestAt)
+	})
+
+	views := make([]domain.ConversationView, len(entries))
+	for i, e := range entries {
+		views[i] = e.view
+	}
+	return views, nil
 }
 
 // Exists reports whether a conversation is currently readable - the same

@@ -104,3 +104,15 @@ func Contains[T comparable](t *testing.T, haystack []T, want T, context string, 
 	}
 	t.Errorf("%s: %v does not contain %v", fmt.Sprintf(context, args...), haystack, want)
 }
+
+// NotContains fails the test if unwanted is an element of haystack -
+// equality checked via ==, which comparable guarantees is defined for T.
+func NotContains[T comparable](t *testing.T, haystack []T, unwanted T, context string, args ...any) {
+	t.Helper()
+	for _, v := range haystack {
+		if v == unwanted {
+			t.Errorf("%s: %v should not contain %v but it does", fmt.Sprintf(context, args...), haystack, unwanted)
+			return
+		}
+	}
+}

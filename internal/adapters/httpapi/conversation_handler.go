@@ -11,15 +11,16 @@ import (
 )
 
 type ConversationHandler struct {
-	starter in.ConversationStarter
-	adder   in.ThreadAdder
-	replier in.ThreadReplier
-	getter  in.ConversationGetter
-	lister  in.EventLister
+	starter      in.ConversationStarter
+	adder        in.ThreadAdder
+	replier      in.ThreadReplier
+	getter       in.ConversationGetter
+	lister       in.EventLister
+	byParticipant in.ConversationsByParticipantGetter
 }
 
-func NewConversationHandler(starter in.ConversationStarter, adder in.ThreadAdder, replier in.ThreadReplier, getter in.ConversationGetter, lister in.EventLister) *ConversationHandler {
-	return &ConversationHandler{starter: starter, adder: adder, replier: replier, getter: getter, lister: lister}
+func NewConversationHandler(starter in.ConversationStarter, adder in.ThreadAdder, replier in.ThreadReplier, getter in.ConversationGetter, lister in.EventLister, byParticipant in.ConversationsByParticipantGetter) *ConversationHandler {
+	return &ConversationHandler{starter: starter, adder: adder, replier: replier, getter: getter, lister: lister, byParticipant: byParticipant}
 }
 
 func (h *ConversationHandler) StartConversation(ctx context.Context, request StartConversationRequestObject) (StartConversationResponseObject, error) {
@@ -136,6 +137,22 @@ func (h *ConversationHandler) ListConversationEvents(ctx context.Context, reques
 	}
 
 	return ListConversationEvents200JSONResponse(events), nil
+}
+
+func (h *ConversationHandler) GetConversationsByParticipant(ctx context.Context, request GetConversationsByParticipantRequestObject) (GetConversationsByParticipantResponseObject, error) {
+	views, err := h.byParticipant.GetConversationsByParticipant(ctx, in.GetConversationsByParticipantCommand{
+		ParticipantID: request.Params.ParticipantId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	conversations := make([]Conversation, len(views))
+	for i, v := range views {
+		conversations[i] = toConversation(v)
+	}
+
+	return GetConversationsByParticipant200JSONResponse(conversations), nil
 }
 
 func toEvent(record domain.EventRecord) Event {

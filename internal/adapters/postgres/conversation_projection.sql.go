@@ -129,6 +129,52 @@ func (q *Queries) GetProjectionCheckpoint(ctx context.Context) (int64, error) {
 	return sequence, err
 }
 
+const listConversationIDsByParticipant = `-- name: ListConversationIDsByParticipant :many
+SELECT cp.id AS conversation_id,
+       COALESCE(
+           MAX(cpm.posted_at) FILTER (WHERE cpt2.participants @> ARRAY[$1::text]),
+           '-infinity'::timestamptz
+       ) AS latest_at
+FROM conversation_projection cp
+JOIN conversation_projection_threads cpt ON cpt.conversation_id = cp.id
+     AND cpt.participants @> ARRAY[$1::text]
+LEFT JOIN conversation_projection_threads cpt2 ON cpt2.conversation_id = cp.id
+     AND cpt2.participants @> ARRAY[$1::text]
+LEFT JOIN conversation_projection_messages cpm ON cpm.conversation_id = cpt2.conversation_id
+     AND cpm.thread_id = cpt2.id
+GROUP BY cp.id
+ORDER BY latest_at DESC
+`
+
+type ListConversationIDsByParticipantRow struct {
+	ConversationID string
+	LatestAt       interface{}
+}
+
+// Returns distinct conversation IDs where the participant appears in at
+// least one thread, ordered by the latest message posted to any of the
+// participant's visible threads within that conversation (most-recently-
+// active first) - rule 3 of "get conversations by participant".
+func (q *Queries) ListConversationIDsByParticipant(ctx context.Context, dollar_1 string) ([]ListConversationIDsByParticipantRow, error) {
+	rows, err := q.db.Query(ctx, listConversationIDsByParticipant, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListConversationIDsByParticipantRow
+	for rows.Next() {
+		var i ListConversationIDsByParticipantRow
+		if err := rows.Scan(&i.ConversationID, &i.LatestAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConversationProjectionMessages = `-- name: ListConversationProjectionMessages :many
 SELECT thread_id, sequence, author, message_text, posted_at
 FROM conversation_projection_messages
@@ -192,6 +238,100 @@ func (q *Queries) ListConversationProjectionThreads(ctx context.Context, convers
 	var items []ListConversationProjectionThreadsRow
 	for rows.Next() {
 		var i ListConversationProjectionThreadsRow
+		if err := rows.Scan(&i.ID, &i.Title, &i.Participants); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParticipantMessagesForConversation = `-- name: ListParticipantMessagesForConversation :many
+SELECT cpm.thread_id, cpm.sequence, cpm.author, cpm.message_text, cpm.posted_at
+FROM conversation_projection_messages cpm
+WHERE cpm.conversation_id = $1
+  AND cpm.thread_id IN (
+      SELECT cpt.id FROM conversation_projection_threads cpt
+      WHERE cpt.conversation_id = $1
+        AND cpt.participants @> ARRAY[$2::text]
+  )
+ORDER BY cpm.sequence
+`
+
+type ListParticipantMessagesForConversationParams struct {
+	ConversationID string
+	Column2        string
+}
+
+type ListParticipantMessagesForConversationRow struct {
+	ThreadID    string
+	Sequence    int64
+	Author      string
+	MessageText string
+	PostedAt    pgtype.Timestamptz
+}
+
+// Returns all messages for threads in a conversation that the participant
+// is part of, in posting order.
+func (q *Queries) ListParticipantMessagesForConversation(ctx context.Context, arg ListParticipantMessagesForConversationParams) ([]ListParticipantMessagesForConversationRow, error) {
+	rows, err := q.db.Query(ctx, listParticipantMessagesForConversation, arg.ConversationID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListParticipantMessagesForConversationRow
+	for rows.Next() {
+		var i ListParticipantMessagesForConversationRow
+		if err := rows.Scan(
+			&i.ThreadID,
+			&i.Sequence,
+			&i.Author,
+			&i.MessageText,
+			&i.PostedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParticipantThreadsForConversation = `-- name: ListParticipantThreadsForConversation :many
+SELECT id, title, participants
+FROM conversation_projection_threads
+WHERE conversation_id = $1
+  AND participants @> ARRAY[$2::text]
+ORDER BY sequence
+`
+
+type ListParticipantThreadsForConversationParams struct {
+	ConversationID string
+	Column2        string
+}
+
+type ListParticipantThreadsForConversationRow struct {
+	ID           string
+	Title        string
+	Participants []string
+}
+
+// Returns all threads in a conversation that the participant is part of,
+// in creation order (rule 2 of "get conversations by participant").
+func (q *Queries) ListParticipantThreadsForConversation(ctx context.Context, arg ListParticipantThreadsForConversationParams) ([]ListParticipantThreadsForConversationRow, error) {
+	rows, err := q.db.Query(ctx, listParticipantThreadsForConversation, arg.ConversationID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListParticipantThreadsForConversationRow
+	for rows.Next() {
+		var i ListParticipantThreadsForConversationRow
 		if err := rows.Scan(&i.ID, &i.Title, &i.Participants); err != nil {
 			return nil, err
 		}

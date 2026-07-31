@@ -17,6 +17,11 @@ import (
 type Projection interface {
 	Apply(ctx context.Context, entries ...OutboxEntry) error
 	Get(ctx context.Context, id domain.ConversationID) (domain.ConversationView, error)
+	// GetByParticipant returns all conversations a participant is involved
+	// in, with each conversation's threads filtered to only those the
+	// participant appears in, ordered by most-recently-active first - see
+	// the "get conversations by participant" story.
+	GetByParticipant(ctx context.Context, id domain.ParticipantID) ([]domain.ConversationView, error)
 	// Exists reports whether a conversation is currently readable - the
 	// same "has at least one thread" notion Get's not-found check uses,
 	// without paying for a full Get (every thread and message) when a

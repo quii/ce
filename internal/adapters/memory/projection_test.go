@@ -13,3 +13,9 @@ func TestProjection_Contract(t *testing.T) {
 		return memory.NewProjection()
 	})
 }
+
+func TestProjectionByParticipant_Contract(t *testing.T) {
+	contracttest.ProjectionByParticipant(t, func() out.Projection {
+		return memory.NewProjection()
+	})
+}

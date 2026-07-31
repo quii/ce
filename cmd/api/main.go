@@ -31,7 +31,7 @@ func main() {
 
 	handler := httpapi.NewCompositeHandler(
 		httpapi.NewGreetingHandler(app.GetGreeting),
-		httpapi.NewConversationHandler(app.StartConversation, app.AddThread, app.ReplyToThread, app.GetConversation, app.ListConversationEvents),
+		httpapi.NewConversationHandler(app.StartConversation, app.AddThread, app.ReplyToThread, app.GetConversation, app.ListConversationEvents, app.GetConversationsByParticipant),
 	)
 	strictHandler := httpapi.NewStrictHandler(handler, nil)
 

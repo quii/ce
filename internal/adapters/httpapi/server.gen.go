@@ -108,6 +108,11 @@ type Thread struct {
 	Title        string   `json:"title"`
 }
 
+// GetConversationsByParticipantParams defines parameters for GetConversationsByParticipant.
+type GetConversationsByParticipantParams struct {
+	ParticipantId string `form:"participant_id" json:"participant_id"`
+}
+
 // GetConversationParams defines parameters for GetConversation.
 type GetConversationParams struct {
 	// After A sequence number from a prior write's Location header - the response is 202 until the projection's checkpoint reaches it
@@ -130,6 +135,9 @@ type ReplyToThreadJSONRequestBody = ReplyToThreadRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get all conversations a participant is involved in, with threads filtered to those the participant appears in
+	// (GET /conversations)
+	GetConversationsByParticipant(w http.ResponseWriter, r *http.Request, params GetConversationsByParticipantParams)
 	// Start a conversation about a resource by posting an opening message
 	// (POST /conversations)
 	StartConversation(w http.ResponseWriter, r *http.Request)
@@ -158,6 +166,39 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetConversationsByParticipant operation middleware
+func (siw *ServerInterfaceWrapper) GetConversationsByParticipant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetConversationsByParticipantParams
+
+	// ------------- Required query parameter "participant_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "participant_id", r.URL.Query(), &params.ParticipantId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "participant_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "participant_id", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConversationsByParticipant(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // StartConversation operation middleware
 func (siw *ServerInterfaceWrapper) StartConversation(w http.ResponseWriter, r *http.Request) {
@@ -455,6 +496,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations", wrapper.GetConversationsByParticipant)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations", wrapper.StartConversation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations/{conversationId}/events", wrapper.ListConversationEvents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations/{conversationId}/threads", wrapper.AddThread)
@@ -463,6 +505,28 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/greeting", wrapper.GetGreeting)
 
 	return m
+}
+
+type GetConversationsByParticipantRequestObject struct {
+	Params GetConversationsByParticipantParams
+}
+
+type GetConversationsByParticipantResponseObject interface {
+	VisitGetConversationsByParticipantResponse(w http.ResponseWriter) error
+}
+
+type GetConversationsByParticipant200JSONResponse []Conversation
+
+func (response GetConversationsByParticipant200JSONResponse) VisitGetConversationsByParticipantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type StartConversationRequestObject struct {
@@ -729,6 +793,9 @@ func (response GetGreeting200JSONResponse) VisitGetGreetingResponse(w http.Respo
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Get all conversations a participant is involved in, with threads filtered to those the participant appears in
+	// (GET /conversations)
+	GetConversationsByParticipant(ctx context.Context, request GetConversationsByParticipantRequestObject) (GetConversationsByParticipantResponseObject, error)
 	// Start a conversation about a resource by posting an opening message
 	// (POST /conversations)
 	StartConversation(ctx context.Context, request StartConversationRequestObject) (StartConversationResponseObject, error)
@@ -776,6 +843,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetConversationsByParticipant operation middleware
+func (sh *strictHandler) GetConversationsByParticipant(w http.ResponseWriter, r *http.Request, params GetConversationsByParticipantParams) {
+	var request GetConversationsByParticipantRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetConversationsByParticipant(ctx, request.(GetConversationsByParticipantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetConversationsByParticipant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetConversationsByParticipantResponseObject); ok {
+		if err := validResponse.VisitGetConversationsByParticipantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // StartConversation operation middleware

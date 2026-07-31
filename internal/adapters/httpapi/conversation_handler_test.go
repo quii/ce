@@ -34,8 +34,9 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 	})
 	getter := in.NewGetConversationUseCase(projection)
 	lister := in.NewListConversationEventsUseCase(events)
+	byParticipant := in.NewGetConversationsByParticipantUseCase(projection)
 
-	return httpapi.NewConversationHandler(starter, adder, replier, getter, lister)
+	return httpapi.NewConversationHandler(starter, adder, replier, getter, lister, byParticipant)
 }
 
 func strPtr(s string) *string { return &s }

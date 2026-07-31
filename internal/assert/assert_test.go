@@ -184,3 +184,21 @@ func TestContains(t *testing.T) {
 		}
 	})
 }
+
+func TestNotContains(t *testing.T) {
+	t.Run("passes when the element is absent", func(t *testing.T) {
+		sub := &testing.T{}
+		assert.NotContains(sub, []string{"user-1", "user-2"}, "user-3", "conversations")
+		if sub.Failed() {
+			t.Errorf("NotContains(absent) failed the test, want it to pass")
+		}
+	})
+
+	t.Run("fails when the element is present", func(t *testing.T) {
+		sub := &testing.T{}
+		assert.NotContains(sub, []string{"user-1", "user-2"}, "user-2", "conversations")
+		if !sub.Failed() {
+			t.Errorf("NotContains(present) passed, want it to fail")
+		}
+	})
+}

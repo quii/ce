@@ -55,12 +55,13 @@ func NewOutPorts(ctx context.Context, databaseURL string) (OutPorts, error) {
 }
 
 type Application struct {
-	GetGreeting            in.Greeter
-	StartConversation      in.ConversationStarter
-	AddThread              in.ThreadAdder
-	ReplyToThread          in.ThreadReplier
-	GetConversation        in.ConversationGetter
-	ListConversationEvents in.EventLister
+	GetGreeting                   in.Greeter
+	StartConversation             in.ConversationStarter
+	AddThread                     in.ThreadAdder
+	ReplyToThread                 in.ThreadReplier
+	GetConversation               in.ConversationGetter
+	ListConversationEvents        in.EventLister
+	GetConversationsByParticipant in.ConversationsByParticipantGetter
 }
 
 func NewApplication(ports OutPorts) *Application {
@@ -83,7 +84,8 @@ func NewApplication(ports OutPorts) *Application {
 			Events:     ports,
 			Projection: ports,
 		}),
-		GetConversation:        in.NewGetConversationUseCase(ports),
-		ListConversationEvents: in.NewListConversationEventsUseCase(ports),
+		GetConversation:               in.NewGetConversationUseCase(ports),
+		ListConversationEvents:        in.NewListConversationEventsUseCase(ports),
+		GetConversationsByParticipant: in.NewGetConversationsByParticipantUseCase(ports),
 	}
 }

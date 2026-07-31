@@ -108,6 +108,11 @@ type Thread struct {
 	Title        string   `json:"title"`
 }
 
+// GetConversationsByParticipantParams defines parameters for GetConversationsByParticipant.
+type GetConversationsByParticipantParams struct {
+	ParticipantId string `form:"participant_id" json:"participant_id"`
+}
+
 // GetConversationParams defines parameters for GetConversation.
 type GetConversationParams struct {
 	// After A sequence number from a prior write's Location header - the response is 202 until the projection's checkpoint reaches it
@@ -201,6 +206,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetConversationsByParticipant request
+	GetConversationsByParticipant(ctx context.Context, params *GetConversationsByParticipantParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartConversationWithBody request with any body
 	StartConversationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -224,6 +232,18 @@ type ClientInterface interface {
 
 	// GetGreeting request
 	GetGreeting(ctx context.Context, params *GetGreetingParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) GetConversationsByParticipant(ctx context.Context, params *GetConversationsByParticipantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetConversationsByParticipantRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) StartConversationWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -332,6 +352,56 @@ func (c *Client) GetGreeting(ctx context.Context, params *GetGreetingParams, req
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetConversationsByParticipantRequest generates requests for GetConversationsByParticipant
+func NewGetConversationsByParticipantRequest(server string, params *GetConversationsByParticipantParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/conversations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "participant_id", params.ParticipantId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewStartConversationRequest calls the generic StartConversation builder with application/json body
@@ -667,6 +737,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetConversationsByParticipantWithResponse request
+	GetConversationsByParticipantWithResponse(ctx context.Context, params *GetConversationsByParticipantParams, reqEditors ...RequestEditorFn) (*GetConversationsByParticipantResponse, error)
+
 	// StartConversationWithBodyWithResponse request with any body
 	StartConversationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartConversationResponse, error)
 
@@ -690,6 +763,36 @@ type ClientWithResponsesInterface interface {
 
 	// GetGreetingWithResponse request
 	GetGreetingWithResponse(ctx context.Context, params *GetGreetingParams, reqEditors ...RequestEditorFn) (*GetGreetingResponse, error)
+}
+
+type GetConversationsByParticipantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]Conversation
+}
+
+// Status returns HTTPResponse.Status
+func (r GetConversationsByParticipantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetConversationsByParticipantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetConversationsByParticipantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type StartConversationResponse struct {
@@ -877,6 +980,15 @@ func (r GetGreetingResponse) ContentType() string {
 	return ""
 }
 
+// GetConversationsByParticipantWithResponse request returning *GetConversationsByParticipantResponse
+func (c *ClientWithResponses) GetConversationsByParticipantWithResponse(ctx context.Context, params *GetConversationsByParticipantParams, reqEditors ...RequestEditorFn) (*GetConversationsByParticipantResponse, error) {
+	rsp, err := c.GetConversationsByParticipant(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetConversationsByParticipantResponse(rsp)
+}
+
 // StartConversationWithBodyWithResponse request with arbitrary body returning *StartConversationResponse
 func (c *ClientWithResponses) StartConversationWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartConversationResponse, error) {
 	rsp, err := c.StartConversationWithBody(ctx, contentType, body, reqEditors...)
@@ -953,6 +1065,32 @@ func (c *ClientWithResponses) GetGreetingWithResponse(ctx context.Context, param
 		return nil, err
 	}
 	return ParseGetGreetingResponse(rsp)
+}
+
+// ParseGetConversationsByParticipantResponse parses an HTTP response from a GetConversationsByParticipantWithResponse call
+func ParseGetConversationsByParticipantResponse(rsp *http.Response) (*GetConversationsByParticipantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetConversationsByParticipantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Conversation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseStartConversationResponse parses an HTTP response from a StartConversationWithResponse call

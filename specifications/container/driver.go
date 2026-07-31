@@ -170,6 +170,25 @@ func (d *Driver) ListConversationEvents(ctx context.Context, cmd in.ListConversa
 	}
 }
 
+func (d *Driver) GetConversationsByParticipant(ctx context.Context, cmd in.GetConversationsByParticipantCommand) ([]domain.ConversationView, error) {
+	resp, err := d.client.GetConversationsByParticipantWithResponse(ctx, &apiclient.GetConversationsByParticipantParams{
+		ParticipantId: cmd.ParticipantID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode() != http.StatusOK || resp.JSON200 == nil {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode())
+	}
+
+	views := make([]domain.ConversationView, len(*resp.JSON200))
+	for i, c := range *resp.JSON200 {
+		views[i] = toConversationView(c)
+	}
+	return views, nil
+}
+
 func (d *Driver) GetConversation(ctx context.Context, cmd in.GetConversationCommand) (domain.ConversationView, error) {
 	var params apiclient.GetConversationParams
 	if cmd.After != nil {

@@ -21,6 +21,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Greeting'
   /conversations:
+    get:
+      operationId: getConversationsByParticipant
+      summary: Get all conversations a participant is involved in, with threads filtered to those the participant appears in
+      parameters:
+        - name: participant_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The conversations the participant is part of, ordered by most recently active first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conversation'
     post:
       operationId: startConversation
       summary: Start a conversation about a resource by posting an opening message

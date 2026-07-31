@@ -22,6 +22,7 @@ type conversationDriver struct {
 	in.ConversationGetter
 	in.EventLister
 	in.Relay
+	in.ConversationsByParticipantGetter
 }
 
 func newConversationDriver() conversationDriver {
@@ -46,9 +47,10 @@ func newConversationDriver() conversationDriver {
 			Events:     events,
 			Projection: projection,
 		}),
-		ConversationGetter: in.NewGetConversationUseCase(projection),
-		EventLister:        in.NewListConversationEventsUseCase(events),
-		Relay:              in.NewRelay(events, projection),
+		ConversationGetter:             in.NewGetConversationUseCase(projection),
+		EventLister:                    in.NewListConversationEventsUseCase(events),
+		Relay:                          in.NewRelay(events, projection),
+		ConversationsByParticipantGetter: in.NewGetConversationsByParticipantUseCase(projection),
 	}
 }
 
@@ -70,4 +72,8 @@ func TestAddThread(t *testing.T) {
 
 func TestListConversationEvents(t *testing.T) {
 	specifications.ListConversationEventsSpecification(t, newConversationDriver())
+}
+
+func TestGetConversationsByParticipant(t *testing.T) {
+	specifications.ConversationsByParticipantSpecification(t, newConversationDriver())
 }

@@ -67,6 +67,12 @@ func TestListConversationEvents(t *testing.T) {
 	specifications.ListConversationEventsSpecification(t, driver)
 }
 
+func TestGetConversationsByParticipant(t *testing.T) {
+	driver := container.New(apiBaseURL)
+
+	specifications.ConversationsByParticipantSpecification(t, driver)
+}
+
 func TestAPIDocs(t *testing.T) {
 	t.Run("serves the OpenAPI spec", func(t *testing.T) {
 		body := get(t, apiBaseURL+"/openapi.yaml")
