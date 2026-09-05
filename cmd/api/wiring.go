@@ -10,11 +10,10 @@ import (
 )
 
 type OutPorts struct {
-	GreetingFinder out.GreetingFinder
-	IDs            out.IDGenerator
-	Clock          out.Clock
-	Events         out.EventStore
-	Projection     out.Projection
+	IDs        out.IDGenerator
+	Clock      out.Clock
+	Events     out.EventStore
+	Projection out.Projection
 }
 
 func NewOutPorts(ctx context.Context, databaseURL string) (*OutPorts, error) {
@@ -25,16 +24,14 @@ func NewOutPorts(ctx context.Context, databaseURL string) (*OutPorts, error) {
 
 	store := postgres.NewStore(pool)
 	return &OutPorts{
-		GreetingFinder: memory.NewGreetingFinder(),
-		IDs:            memory.NewIDGenerator(),
-		Clock:          memory.NewClock(),
-		Events:         store,
-		Projection:     store,
+		IDs:        memory.NewIDGenerator(),
+		Clock:      memory.NewClock(),
+		Events:     store,
+		Projection: store,
 	}, nil
 }
 
 type Application struct {
-	GetGreeting                   in.Greeter
 	StartConversation             in.ConversationStarter
 	AddThread                     in.ThreadAdder
 	ReplyToThread                 in.ThreadReplier
@@ -46,7 +43,6 @@ type Application struct {
 
 func NewApplication(ports *OutPorts) *Application {
 	return &Application{
-		GetGreeting:                   in.NewGetGreetingUseCase(ports.GreetingFinder),
 		StartConversation:             in.NewStartConversationUseCase(ports.IDs, ports.Clock, ports.Events),
 		AddThread:                     in.NewAddThreadUseCase(ports.IDs, ports.Clock, ports.Events, ports.Projection),
 		ReplyToThread:                 in.NewReplyToThreadUseCase(ports.IDs, ports.Clock, ports.Events, ports.Projection),

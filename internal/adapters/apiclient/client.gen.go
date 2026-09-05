@@ -74,11 +74,6 @@ type Event struct {
 	Type string `json:"type"`
 }
 
-// Greeting defines model for Greeting.
-type Greeting struct {
-	Greeting string `json:"greeting"`
-}
-
 // Message defines model for Message.
 type Message struct {
 	Author   string    `json:"author"`
@@ -120,11 +115,6 @@ type GetConversationsByParticipantParams struct {
 type GetConversationParams struct {
 	// After A sequence number from a prior write's Location header - the response is 202 until the projection's checkpoint reaches it
 	After *int64 `form:"after,omitempty" json:"after,omitempty"`
-}
-
-// GetGreetingParams defines parameters for GetGreeting.
-type GetGreetingParams struct {
-	Name *string `form:"name,omitempty" json:"name,omitempty"`
 }
 
 // StartConversationJSONRequestBody defines body for StartConversation for application/json ContentType.
@@ -238,9 +228,6 @@ type ClientInterface interface {
 
 	// GetConversation request
 	GetConversation(ctx context.Context, id string, params *GetConversationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetGreeting request
-	GetGreeting(ctx context.Context, params *GetGreetingParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetConversationsByParticipant(ctx context.Context, params *GetConversationsByParticipantParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -365,18 +352,6 @@ func (c *Client) AddThreadParticipant(ctx context.Context, conversationId string
 
 func (c *Client) GetConversation(ctx context.Context, id string, params *GetConversationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetConversationRequest(c.Server, id, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetGreeting(ctx context.Context, params *GetGreetingParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetGreetingRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -769,60 +744,6 @@ func NewGetConversationRequest(server string, id string, params *GetConversation
 	return req, nil
 }
 
-// NewGetGreetingRequest generates requests for GetGreeting
-func NewGetGreetingRequest(server string, params *GetGreetingParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/greeting")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Name != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "name", *params.Name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -895,9 +816,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetConversationWithResponse request
 	GetConversationWithResponse(ctx context.Context, id string, params *GetConversationParams, reqEditors ...RequestEditorFn) (*GetConversationResponse, error)
-
-	// GetGreetingWithResponse request
-	GetGreetingWithResponse(ctx context.Context, params *GetGreetingParams, reqEditors ...RequestEditorFn) (*GetGreetingResponse, error)
 }
 
 type GetConversationsByParticipantResponse struct {
@@ -1147,36 +1065,6 @@ func (r GetConversationResponse) ContentType() string {
 	return ""
 }
 
-type GetGreetingResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *Greeting
-}
-
-// Status returns HTTPResponse.Status
-func (r GetGreetingResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetGreetingResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetGreetingResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 // GetConversationsByParticipantWithResponse request returning *GetConversationsByParticipantResponse
 func (c *ClientWithResponses) GetConversationsByParticipantWithResponse(ctx context.Context, params *GetConversationsByParticipantParams, reqEditors ...RequestEditorFn) (*GetConversationsByParticipantResponse, error) {
 	rsp, err := c.GetConversationsByParticipant(ctx, params, reqEditors...)
@@ -1271,15 +1159,6 @@ func (c *ClientWithResponses) GetConversationWithResponse(ctx context.Context, i
 		return nil, err
 	}
 	return ParseGetConversationResponse(rsp)
-}
-
-// GetGreetingWithResponse request returning *GetGreetingResponse
-func (c *ClientWithResponses) GetGreetingWithResponse(ctx context.Context, params *GetGreetingParams, reqEditors ...RequestEditorFn) (*GetGreetingResponse, error) {
-	rsp, err := c.GetGreeting(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetGreetingResponse(rsp)
 }
 
 // ParseGetConversationsByParticipantResponse parses an HTTP response from a GetConversationsByParticipantWithResponse call
@@ -1533,32 +1412,6 @@ func ParseGetConversationResponse(rsp *http.Response) (*GetConversationResponse,
 			return nil, err
 		}
 		response.JSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetGreetingResponse parses an HTTP response from a GetGreetingWithResponse call
-func ParseGetGreetingResponse(rsp *http.Response) (*GetGreetingResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetGreetingResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Greeting
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
 
 	}
 

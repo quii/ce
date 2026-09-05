@@ -17,7 +17,7 @@ Conversation Engine (CE): a containerised Go service providing threaded conversa
 
 Single test, fast tier: `go test ./internal/domain/... -run TestName -v` (a one-off scoped run like this is fine - it's whole-suite verification that should go through mage). A test under a `//go:build integration` file (anything in `internal/adapters/postgres/`, `specifications/container/`) needs `-tags=integration` added to that same invocation or it won't compile in.
 
-`docker compose up` (or `go tool mage up`, which additionally guards against port conflicts and is preferred) brings up the whole stack - Postgres, `api`, `relay`, `web` - built from one `Dockerfile` via a `SERVICE` build arg per role. Don't manually `go run ./cmd/api` + `curl` to check an HTTP change works - `go tool mage test` already exercises real HTTP behaviour through both drivers (`docs/development-practice.md`).
+`docker compose up` (or `go tool mage up`, which additionally guards against port conflicts and is preferred) brings up the whole stack - Postgres, `api`, `relay` - built from one `Dockerfile` via a `SERVICE` build arg per role. Don't manually `go run ./cmd/api` + `curl` to check an HTTP change works - `go tool mage test` already exercises real HTTP behaviour through both drivers (`docs/development-practice.md`).
 
 ## Development workflow
 
@@ -36,8 +36,8 @@ Hexagonal, dependencies point inward: `internal/adapters` → `internal/ports` �
 - **`internal/domain`** - the rich domain model: tiny types (not raw strings), errors as domain sentinels, all business rules. Pure, synchronous, no I/O.
 - **`internal/ports/in`** - one interface per use case ("start a conversation", "reply to a thread"), each named for the job a caller is doing. HTTP handlers call these and nothing else - handlers stay a thin translate-request→command→translate-response layer.
 - **`internal/ports/out`** - interfaces for everything external (event store, outbox, projection). The domain/use-cases only ever see the interface.
-- **`internal/adapters`** - concrete implementations: `memory` (fakes, used in fast tests), `postgres` (real, sqlc + goose migrations), `httpapi` (oapi-codegen generated server + hand-written handlers), `apiclient` (generated client, used by `web` and the container-driver specs), `webui` (the htmx demo frontend - deliberately outside the story process and the ADR-check rigor bar; see `docs/source-control.md`), `contracttest` (shared test suites run against both the memory fake and the real Postgres adapter, so they can never silently disagree).
-- **`cmd/{api,relay,web}`** - the three deployable roles, each its own thin composition root wiring adapters into use cases (nothing else constructs a dependency - see ADR 0025).
+- **`internal/adapters`** - concrete implementations: `memory` (fakes, used in fast tests), `postgres` (real, sqlc + goose migrations), `httpapi` (oapi-codegen generated server + hand-written handlers), `apiclient` (generated client, used by the container-driver specs), `contracttest` (shared test suites run against both the memory fake and the real Postgres adapter, so they can never silently disagree).
+- **`cmd/{api,relay}`** - the two deployable roles, each its own thin composition root wiring adapters into use cases (nothing else constructs a dependency - see ADR 0025).
 
 ### Write path (event sourcing + CQRS)
 

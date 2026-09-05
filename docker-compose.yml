@@ -38,16 +38,3 @@ services:
       postgres:
         condition: service_healthy
     restart: on-failure
-
-  web:
-    build:
-      context: .
-      args:
-        SERVICE: web
-    environment:
-      API_BASE_URL: http://api:8080
-    ports:
-      - "8090:8080"
-    depends_on:
-      - api
-    restart: on-failure

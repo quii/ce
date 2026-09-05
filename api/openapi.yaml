@@ -3,23 +3,6 @@ info:
   title: ce
   version: 0.1.0
 paths:
-  /greeting:
-    get:
-      operationId: getGreeting
-      summary: Get a greeting, optionally personalized with a name
-      parameters:
-        - name: name
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: A greeting
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Greeting'
   /conversations:
     get:
       operationId: getConversationsByParticipant
@@ -292,13 +275,6 @@ paths:
                 $ref: '#/components/schemas/Error'
 components:
   schemas:
-    Greeting:
-      type: object
-      required:
-        - greeting
-      properties:
-        greeting:
-          type: string
     Error:
       type: object
       required:

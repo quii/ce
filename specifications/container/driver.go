@@ -31,24 +31,6 @@ func (d *Driver) Drain(_ context.Context) error {
 	return nil
 }
 
-func (d *Driver) Greet(ctx context.Context, cmd in.GetGreetingCommand) (domain.Greeting, error) {
-	var params apiclient.GetGreetingParams
-	if cmd.Name != "" {
-		params.Name = &cmd.Name
-	}
-
-	resp, err := d.client.GetGreetingWithResponse(ctx, &params)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode() != http.StatusOK || resp.JSON200 == nil {
-		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode())
-	}
-
-	return domain.Greeting(resp.JSON200.Greeting), nil
-}
-
 func (d *Driver) StartConversation(ctx context.Context, cmd in.StartConversationCommand) (in.StartConversationResult, error) {
 	resp, err := d.client.StartConversationWithResponse(ctx, apiclient.StartConversationJSONRequestBody{
 		ResourceUrl: cmd.ResourceURL,

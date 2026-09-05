@@ -27,12 +27,6 @@ import (
 // per-test.
 var apiBaseURL string
 
-func TestGreeting(t *testing.T) {
-	driver := container.New(apiBaseURL)
-
-	specifications.GreetingSpecification(t, driver)
-}
-
 func TestStartConversation(t *testing.T) {
 	driver := container.New(apiBaseURL)
 
@@ -153,7 +147,7 @@ func runWithTopology(m *testing.M) int {
 	defer stopPostgres()
 
 	baseURL, stopAPI, err := startService(ctx, net.Name, "api", true,
-		wait.ForHTTP("/greeting").WithPort("8080/tcp").WithStartupTimeout(2*time.Minute))
+		wait.ForHTTP("/openapi.yaml").WithPort("8080/tcp").WithStartupTimeout(2*time.Minute))
 	if err != nil {
 		log.Printf("start api: %v", err)
 		return 1

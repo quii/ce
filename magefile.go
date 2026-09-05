@@ -122,17 +122,17 @@ func composeOwnedPorts() map[int]bool {
 	return owned
 }
 
-// Run runs the given app (api, relay, or web) via go run, inheriting the
+// Run runs the given app (api or relay) via go run, inheriting the
 // current environment - e.g. `go tool mage run api`.
 func Run(service string) error {
 	switch service {
-	case "api", "web":
+	case "api":
 		if err := checkPortsFree(8080); err != nil {
 			return err
 		}
 	case "relay":
 	default:
-		return fmt.Errorf("unknown service %q - want one of: api, relay, web", service)
+		return fmt.Errorf("unknown service %q - want one of: api, relay", service)
 	}
 
 	cmd := exec.Command("go", "run", "./cmd/"+service)

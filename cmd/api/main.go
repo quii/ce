@@ -29,10 +29,7 @@ func main() {
 	}
 	app := NewApplication(outPorts)
 
-	handler := httpapi.NewCompositeHandler(
-		httpapi.NewGreetingHandler(app.GetGreeting),
-		httpapi.NewConversationHandler(app.StartConversation, app.AddThread, app.ReplyToThread, app.ManageThreadParticipants, app.GetConversation, app.ListConversationEvents, app.GetConversationsByParticipant),
-	)
+	handler := httpapi.NewConversationHandler(app.StartConversation, app.AddThread, app.ReplyToThread, app.ManageThreadParticipants, app.GetConversation, app.ListConversationEvents, app.GetConversationsByParticipant)
 	strictHandler := httpapi.NewStrictHandler(handler, nil)
 
 	apiMux := http.NewServeMux()

@@ -8,13 +8,6 @@ import (
 	"github.com/quii/ce/specifications"
 )
 
-func TestGreeting(t *testing.T) {
-	greetings := memory.NewGreetingFinder()
-	useCase := in.NewGetGreetingUseCase(greetings)
-
-	specifications.GreetingSpecification(t, useCase)
-}
-
 type conversationDriver struct {
 	in.ConversationStarter
 	in.ThreadAdder

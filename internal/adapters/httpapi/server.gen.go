@@ -74,11 +74,6 @@ type Event struct {
 	Type string `json:"type"`
 }
 
-// Greeting defines model for Greeting.
-type Greeting struct {
-	Greeting string `json:"greeting"`
-}
-
 // Message defines model for Message.
 type Message struct {
 	Author   string    `json:"author"`
@@ -122,11 +117,6 @@ type GetConversationParams struct {
 	After *int64 `form:"after,omitempty" json:"after,omitempty"`
 }
 
-// GetGreetingParams defines parameters for GetGreeting.
-type GetGreetingParams struct {
-	Name *string `form:"name,omitempty" json:"name,omitempty"`
-}
-
 // StartConversationJSONRequestBody defines body for StartConversation for application/json ContentType.
 type StartConversationJSONRequestBody = StartConversationRequest
 
@@ -162,9 +152,6 @@ type ServerInterface interface {
 	// Get a conversation, optionally waiting for a specific write to be reflected
 	// (GET /conversations/{id})
 	GetConversation(w http.ResponseWriter, r *http.Request, id string, params GetConversationParams)
-	// Get a greeting, optionally personalized with a name
-	// (GET /greeting)
-	GetGreeting(w http.ResponseWriter, r *http.Request, params GetGreetingParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -440,39 +427,6 @@ func (siw *ServerInterfaceWrapper) GetConversation(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// GetGreeting operation middleware
-func (siw *ServerInterfaceWrapper) GetGreeting(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetGreetingParams
-
-	// ------------- Optional query parameter "name" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "name", r.URL.Query(), &params.Name, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "name"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetGreeting(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -601,7 +555,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/conversations/{conversationId}/threads/{threadId}/participants/{participantId}", wrapper.RemoveThreadParticipant)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/conversations/{conversationId}/threads/{threadId}/participants/{participantId}", wrapper.AddThreadParticipant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations/{id}", wrapper.GetConversation)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/greeting", wrapper.GetGreeting)
 
 	return m
 }
@@ -992,28 +945,6 @@ func (response GetConversation404JSONResponse) VisitGetConversationResponse(w ht
 	return err
 }
 
-type GetGreetingRequestObject struct {
-	Params GetGreetingParams
-}
-
-type GetGreetingResponseObject interface {
-	VisitGetGreetingResponse(w http.ResponseWriter) error
-}
-
-type GetGreeting200JSONResponse Greeting
-
-func (response GetGreeting200JSONResponse) VisitGetGreetingResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get all conversations a participant is involved in, with threads filtered to those the participant appears in
@@ -1040,9 +971,6 @@ type StrictServerInterface interface {
 	// Get a conversation, optionally waiting for a specific write to be reflected
 	// (GET /conversations/{id})
 	GetConversation(ctx context.Context, request GetConversationRequestObject) (GetConversationResponseObject, error)
-	// Get a greeting, optionally personalized with a name
-	// (GET /greeting)
-	GetGreeting(ctx context.Context, request GetGreetingRequestObject) (GetGreetingResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1300,32 +1228,6 @@ func (sh *strictHandler) GetConversation(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetConversationResponseObject); ok {
 		if err := validResponse.VisitGetConversationResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetGreeting operation middleware
-func (sh *strictHandler) GetGreeting(w http.ResponseWriter, r *http.Request, params GetGreetingParams) {
-	var request GetGreetingRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetGreeting(ctx, request.(GetGreetingRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetGreeting")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetGreetingResponseObject); ok {
-		if err := validResponse.VisitGetGreetingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
