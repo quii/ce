@@ -65,15 +65,18 @@ linters:
         linters:
           - revive
         text: "argument-limit"
-      # ADR 0003's "one command struct" rule is about the public in-port surface. Unexported
-      # (lowercase-named) functions and methods inside internal/ports/** are implementation
-      # detail - a private helper composing the pipeline of an in-port is just Go and doesn't
-      # need to be bent into a fake-command shape to satisfy this rule.
+      # ADR 0003's "one command struct" rule is about the public in-port surface -
+      # exported methods on the use case struct that satisfy the in-port interface.
+      # Constructors (`New*` free functions) and private helpers inside internal/ports/**
+      # are not in scope. Regex matches everything EXCEPT `func (recv) UpperName(...)`
+      # (an exported method with a receiver): unexported methods `^func (recv) lower`,
+      # unexported free functions `^func lower`, and exported free functions
+      # `^func Upper` (constructors) all match and are excluded.
       - path: "^internal/ports/"
         linters:
           - revive
         text: "argument-limit"
-        source: "^func (\\([^)]+\\) )?[a-z]"
+        source: "^func (\\([^)]+\\) )?[a-z]|^func [A-Z]"
       - path: "_test\\.go"
         linters:
           - revive

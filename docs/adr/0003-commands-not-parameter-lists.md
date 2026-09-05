@@ -28,13 +28,11 @@ Keeping the rule scoped to the public surface is deliberate. The whole reason to
 
 Every in-port method has exactly one meaningful parameter besides `context.Context`. Constructors and private helpers are ordinary Go.
 
-Existing `FooDependencies` bundle types (`ReplyToThreadDependencies`, `AddThreadDependencies`, `StartConversationDependencies`) predate this clarification and get flattened opportunistically the next time each is touched, not in a preemptive sweep.
-
 ## Enforcement
 
 Mechanical - `revive`'s `argument-limit` rule, set to 2 (room for `ctx` plus one command struct), scoped via `linters.exclusions.rules` in `.golangci.yml`:
 
 1. Everything outside `internal/ports/**` is excluded outright.
-2. Inside `internal/ports/**`, a `source`-regex exclusion (`^func (\([^)]+\) )?[a-z]`) suppresses the check for unexported (lowercase-named) functions and methods.
+2. Inside `internal/ports/**`, a `source`-regex exclusion (`^func (\([^)]+\) )?[a-z]|^func [A-Z]`) excludes every function declaration EXCEPT one that has a receiver AND an exported name - i.e. exactly `func (recv T) UpperName(...)`. That covers exported methods with a receiver (the in-port interface implementations) and leaves everything else - unexported methods, unexported free functions, and exported free functions (constructors) - out of scope.
 
 The combination leaves the check biting exactly the public in-port surface - interface methods and the exported methods that satisfy them - and no other function in the codebase.

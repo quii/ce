@@ -31,23 +31,9 @@ func newConversationDriver() conversationDriver {
 	projection := memory.NewProjection()
 
 	return conversationDriver{
-		ConversationStarter: in.NewStartConversationUseCase(in.StartConversationDependencies{
-			IDs:    memory.NewIDGenerator(),
-			Clock:  memory.NewClock(),
-			Events: events,
-		}),
-		ThreadAdder: in.NewAddThreadUseCase(in.AddThreadDependencies{
-			IDs:        memory.NewIDGenerator(),
-			Clock:      memory.NewClock(),
-			Events:     events,
-			Projection: projection,
-		}),
-		ThreadReplier: in.NewReplyToThreadUseCase(in.ReplyToThreadDependencies{
-			IDs:        memory.NewIDGenerator(),
-			Clock:      memory.NewClock(),
-			Events:     events,
-			Projection: projection,
-		}),
+		ConversationStarter:              in.NewStartConversationUseCase(memory.NewIDGenerator(), memory.NewClock(), events),
+		ThreadAdder:                      in.NewAddThreadUseCase(memory.NewIDGenerator(), memory.NewClock(), events, projection),
+		ThreadReplier:                    in.NewReplyToThreadUseCase(memory.NewIDGenerator(), memory.NewClock(), events, projection),
 		ThreadParticipantManager:         in.NewManageThreadParticipantUseCase(memory.NewClock(), events),
 		ConversationGetter:               in.NewGetConversationUseCase(projection),
 		EventLister:                      in.NewListConversationEventsUseCase(events),

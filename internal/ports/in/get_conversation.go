@@ -7,8 +7,6 @@ import (
 	"github.com/quii/ce/internal/ports/out"
 )
 
-// GetConversationCommand is raw, not-yet-validated input. After is nil for
-// a plain read (rule 9); non-nil to wait for a specific write (rule 8).
 type GetConversationCommand struct {
 	ConversationID string
 	After          *int64

@@ -15,23 +15,9 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 
 	events := memory.NewEventStore()
 	projection := memory.NewProjection()
-	starter := in.NewStartConversationUseCase(in.StartConversationDependencies{
-		IDs:    memory.NewIDGenerator(),
-		Clock:  memory.NewClock(),
-		Events: events,
-	})
-	adder := in.NewAddThreadUseCase(in.AddThreadDependencies{
-		IDs:        memory.NewIDGenerator(),
-		Clock:      memory.NewClock(),
-		Events:     events,
-		Projection: projection,
-	})
-	replier := in.NewReplyToThreadUseCase(in.ReplyToThreadDependencies{
-		IDs:        memory.NewIDGenerator(),
-		Clock:      memory.NewClock(),
-		Events:     events,
-		Projection: projection,
-	})
+	starter := in.NewStartConversationUseCase(memory.NewIDGenerator(), memory.NewClock(), events)
+	adder := in.NewAddThreadUseCase(memory.NewIDGenerator(), memory.NewClock(), events, projection)
+	replier := in.NewReplyToThreadUseCase(memory.NewIDGenerator(), memory.NewClock(), events, projection)
 	participants := in.NewManageThreadParticipantUseCase(memory.NewClock(), events)
 	getter := in.NewGetConversationUseCase(projection)
 	lister := in.NewListConversationEventsUseCase(events)

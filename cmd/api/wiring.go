@@ -46,24 +46,10 @@ type Application struct {
 
 func NewApplication(ports *OutPorts) *Application {
 	return &Application{
-		GetGreeting: in.NewGetGreetingUseCase(ports.GreetingFinder),
-		StartConversation: in.NewStartConversationUseCase(in.StartConversationDependencies{
-			IDs:    ports.IDs,
-			Clock:  ports.Clock,
-			Events: ports.Events,
-		}),
-		AddThread: in.NewAddThreadUseCase(in.AddThreadDependencies{
-			IDs:        ports.IDs,
-			Clock:      ports.Clock,
-			Events:     ports.Events,
-			Projection: ports.Projection,
-		}),
-		ReplyToThread: in.NewReplyToThreadUseCase(in.ReplyToThreadDependencies{
-			IDs:        ports.IDs,
-			Clock:      ports.Clock,
-			Events:     ports.Events,
-			Projection: ports.Projection,
-		}),
+		GetGreeting:                   in.NewGetGreetingUseCase(ports.GreetingFinder),
+		StartConversation:             in.NewStartConversationUseCase(ports.IDs, ports.Clock, ports.Events),
+		AddThread:                     in.NewAddThreadUseCase(ports.IDs, ports.Clock, ports.Events, ports.Projection),
+		ReplyToThread:                 in.NewReplyToThreadUseCase(ports.IDs, ports.Clock, ports.Events, ports.Projection),
 		ManageThreadParticipants:      in.NewManageThreadParticipantUseCase(ports.Clock, ports.Events),
 		GetConversation:               in.NewGetConversationUseCase(ports.Projection),
 		ListConversationEvents:        in.NewListConversationEventsUseCase(ports.Events),

@@ -7,8 +7,6 @@ import (
 	"github.com/quii/ce/internal/ports/out"
 )
 
-// GetConversationsByParticipantCommand is raw, not-yet-validated input -
-// see docs/adr/0010-tiny-types.md.
 type GetConversationsByParticipantCommand struct {
 	ParticipantID string
 }
