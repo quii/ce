@@ -48,7 +48,7 @@ func newConversationDriver() conversationDriver {
 			Events:     events,
 			Projection: projection,
 		}),
-		ThreadParticipantManager:         in.NewManageThreadParticipantUseCase(in.ManageThreadParticipantDependencies{Clock: memory.NewClock(), Events: events}),
+		ThreadParticipantManager:         in.NewManageThreadParticipantUseCase(memory.NewClock(), events),
 		ConversationGetter:               in.NewGetConversationUseCase(projection),
 		EventLister:                      in.NewListConversationEventsUseCase(events),
 		Relay:                            in.NewRelay(events, projection),

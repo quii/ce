@@ -32,7 +32,7 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 		Events:     events,
 		Projection: projection,
 	})
-	participants := in.NewManageThreadParticipantUseCase(in.ManageThreadParticipantDependencies{Clock: memory.NewClock(), Events: events})
+	participants := in.NewManageThreadParticipantUseCase(memory.NewClock(), events)
 	getter := in.NewGetConversationUseCase(projection)
 	lister := in.NewListConversationEventsUseCase(events)
 	byParticipant := in.NewGetConversationsByParticipantUseCase(projection)

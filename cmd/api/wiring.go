@@ -9,47 +9,26 @@ import (
 	"github.com/quii/ce/internal/ports/out"
 )
 
-// docs/adr/0025-composition-root.md: the only place a concrete out-adapter gets constructed.
-//
-// out.Outbox isn't part of this bundle: nothing cmd/api wires up needs
-// it - Events.Append alone durably writes the outbox row too (see
-// in.StartConversationDependencies), and draining the outbox is
-// cmd/relay's job, not the api role's. postgres.Store still implements
-// out.Outbox (cmd/relay and the contract tests need that), this
-// composition root just never reaches for it.
-type OutPorts interface {
-	out.GreetingFinder
-	out.IDGenerator
-	out.Clock
-	out.EventStore
-	out.Projection
+type OutPorts struct {
+	GreetingFinder out.GreetingFinder
+	IDs            out.IDGenerator
+	Clock          out.Clock
+	Events         out.EventStore
+	Projection     out.Projection
 }
 
-type outPorts struct {
-	out.GreetingFinder
-	out.IDGenerator
-	out.Clock
-	out.EventStore
-	out.Projection
-}
-
-// NewOutPorts wires cmd/api's production out-ports: the event store and
-// projection are Postgres-backed (docs/adr/0026-sql-spec-first-with-sqlc.md);
-// the ID generator and clock have no persistence concern of their own, so
-// the same in-memory adapters that back the in-process driver/tests are
-// what production uses too.
-func NewOutPorts(ctx context.Context, databaseURL string) (OutPorts, error) {
+func NewOutPorts(ctx context.Context, databaseURL string) (*OutPorts, error) {
 	pool, err := postgres.NewPool(ctx, databaseURL)
 	if err != nil {
 		return nil, err
 	}
 
 	store := postgres.NewStore(pool)
-	return &outPorts{
+	return &OutPorts{
 		GreetingFinder: memory.NewGreetingFinder(),
-		IDGenerator:    memory.NewIDGenerator(),
+		IDs:            memory.NewIDGenerator(),
 		Clock:          memory.NewClock(),
-		EventStore:     store,
+		Events:         store,
 		Projection:     store,
 	}, nil
 }
@@ -65,29 +44,29 @@ type Application struct {
 	GetConversationsByParticipant in.ConversationsByParticipantGetter
 }
 
-func NewApplication(ports OutPorts) *Application {
+func NewApplication(ports *OutPorts) *Application {
 	return &Application{
-		GetGreeting: in.NewGetGreetingUseCase(ports),
+		GetGreeting: in.NewGetGreetingUseCase(ports.GreetingFinder),
 		StartConversation: in.NewStartConversationUseCase(in.StartConversationDependencies{
-			IDs:    ports,
-			Clock:  ports,
-			Events: ports,
+			IDs:    ports.IDs,
+			Clock:  ports.Clock,
+			Events: ports.Events,
 		}),
 		AddThread: in.NewAddThreadUseCase(in.AddThreadDependencies{
-			IDs:        ports,
-			Clock:      ports,
-			Events:     ports,
-			Projection: ports,
+			IDs:        ports.IDs,
+			Clock:      ports.Clock,
+			Events:     ports.Events,
+			Projection: ports.Projection,
 		}),
 		ReplyToThread: in.NewReplyToThreadUseCase(in.ReplyToThreadDependencies{
-			IDs:        ports,
-			Clock:      ports,
-			Events:     ports,
-			Projection: ports,
+			IDs:        ports.IDs,
+			Clock:      ports.Clock,
+			Events:     ports.Events,
+			Projection: ports.Projection,
 		}),
-		ManageThreadParticipants:      in.NewManageThreadParticipantUseCase(in.ManageThreadParticipantDependencies{Clock: ports, Events: ports}),
-		GetConversation:               in.NewGetConversationUseCase(ports),
-		ListConversationEvents:        in.NewListConversationEventsUseCase(ports),
-		GetConversationsByParticipant: in.NewGetConversationsByParticipantUseCase(ports),
+		ManageThreadParticipants:      in.NewManageThreadParticipantUseCase(ports.Clock, ports.Events),
+		GetConversation:               in.NewGetConversationUseCase(ports.Projection),
+		ListConversationEvents:        in.NewListConversationEventsUseCase(ports.Events),
+		GetConversationsByParticipant: in.NewGetConversationsByParticipantUseCase(ports.Projection),
 	}
 }

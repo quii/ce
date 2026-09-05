@@ -19,8 +19,8 @@ Only `cmd/**` constructs things. A `main.go` is the one and only place a concret
 Every binary's composition root wires its dependencies bottom-up, through the same four stages, from the first out-port and use case it has - not deferred until a second one shows up:
 
 1. **Bootstrap** - read config/env, nothing else. The only place that touches the messy outside-configuration world.
-2. **`OutPorts`** - an interface aggregating every out-port the binary's use cases need, with one concrete constructor (e.g. `NewOutPorts(cfg)`) that builds every out-adapter and returns the bundle. This is the one place all out-adapters get constructed, even when there's only one of them today.
-3. **`Application`** - a concrete struct (not an interface - there's nothing to abstract over) bundling the constructed use cases, built from an `OutPorts` value. Use plain, boring names for this - not "Hub" or similar.
+2. **`OutPorts`** - a struct with one exported field per out-port the binary needs, each field typed as the out-port interface and populated with the concrete adapter. `NewOutPorts(cfg)` is the one place all out-adapters get constructed, even when there's only one of them today. Downstream construction in the same file references the fields by name (`in.NewX(ports.Clock, ports.Events)`) rather than passing the whole bundle - so every use case's actual dependencies show up at its callsite, not just inside its own constructor.
+3. **`Application`** - a concrete struct (not an interface - there's nothing to abstract over) bundling the constructed use cases, built from an `*OutPorts` value. Use plain, boring names for this - not "Hub" or similar.
 4. **In-adaptors** - HTTP handlers, CLI, etc., built last, from `Application`.
 
 Starting every binary on this shape from day one, rather than "flat until it hurts," is the point: there's no threshold to guess at, no moment where someone has to notice the fan-out has arrived and go refactor `main` under time pressure. The shape is already there waiting for the second out-port or use case.
@@ -32,6 +32,10 @@ An architecture diagram doesn't rot in the design - it rots in the wiring, in th
 ## Consequences
 
 `main.go` grows only along the bootstrap → `OutPorts` → `Application` → in-adaptors order as a binary's needs grow - never by adding a construction call somewhere else because it was more convenient there. A handler, a use case, or a domain type constructing a concrete dependency itself, rather than receiving it, is always a violation regardless of how small the dependency looks.
+
+## History
+
+Step 2 originally read "an interface aggregating every out-port the binary's use cases need," with the concrete adapters attached via embedded interface fields. That let a single-dependency use case take the aggregate directly - `in.NewGetGreetingUseCase(ports)` picked up `out.GreetingFinder` implicitly through embedding - but it meant every multi-dependency callsite had to pass the same identifier several times (`in.NewManageThreadParticipantUseCase(ports, ports)`) with no indication at the callsite of which position was which port. Corrected once caught: the bundle is now a struct with named fields, so every callsite in the composition root reads as an inventory of what that specific use case actually needs, not a list of the same opaque identifier repeated. `NewApplication` takes `*OutPorts`, not the old interface type.
 
 ## Enforcement
 
