@@ -3,13 +3,11 @@ package domain
 import "time"
 
 // ConversationView is the read model served by GetConversation - rule 10
-// of the "start a conversation" story. It's a plain, behaviourless
-// projection of past events, not an aggregate with invariants of its own,
-// see docs/adr/0006-rich-domain-not-anemic.md. Threads is a list, not a
-// single value, since a conversation is no longer assumed to have exactly
-// one thread (rule 9 of "add a thread to a conversation") - in creation
-// order (rule 10): the original thread first, then each added thread in
-// the order its ThreadStarted event was appended.
+// of the "start a conversation" story. Threads is a list, not a single
+// value, since a conversation is no longer assumed to have exactly one
+// thread (rule 9 of "add a thread to a conversation") - in creation order
+// (rule 10): the original thread first, then each added thread in the order
+// its ThreadStarted event was appended.
 type ConversationView struct {
 	ID          ConversationID
 	ResourceURL ResourceURL
@@ -32,10 +30,8 @@ func (c ConversationView) Thread(id ThreadID) (ThreadView, bool) {
 }
 
 // ThreadView's Participants is the union of the thread's original author
-// and its recipients, computed once when ThreadStarted is applied to
-// build the projection and frozen from then on - a reply never changes it
-// (rules 1-2 of "thread participants"). It has no guaranteed order (rule
-// 4): it's a set, not a sequence.
+// and its recipients, updated only by membership events. It has no
+// guaranteed order: it's a set, not a sequence.
 type ThreadView struct {
 	ID           ThreadID
 	Title        ThreadTitle
@@ -44,9 +40,7 @@ type ThreadView struct {
 }
 
 // HasParticipant reports whether id is one of the thread's participants -
-// exactly the frozen set it was created with (rule 3 of "reply to a
-// thread"/rule 5 of "thread participants"; participation changes are
-// deferred to a future story).
+// exactly the current membership set.
 func (t ThreadView) HasParticipant(id ParticipantID) bool {
 	return t.Participants.Contains(id)
 }

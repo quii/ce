@@ -104,6 +104,15 @@ func toDomainEvent(sequence int64, eventType, conversationID string, occurredAt 
 			MessageText:    domain.MessageText(p.MessageText),
 			OccurredAt:     occurredAt.Time,
 		}, nil
+	case eventTypeParticipantAdded, eventTypeParticipantRemoved:
+		var p participantPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, fmt.Errorf("could not unmarshal %s payload for sequence %d: %w", eventType, sequence, err)
+		}
+		if eventType == eventTypeParticipantAdded {
+			return domain.ParticipantAdded{ConversationID: domain.ConversationID(conversationID), ThreadID: domain.ThreadID(p.ThreadID), ParticipantID: domain.ParticipantID(p.ParticipantID), OccurredAt: occurredAt.Time}, nil
+		}
+		return domain.ParticipantRemoved{ConversationID: domain.ConversationID(conversationID), ThreadID: domain.ThreadID(p.ThreadID), ParticipantID: domain.ParticipantID(p.ParticipantID), OccurredAt: occurredAt.Time}, nil
 	default:
 		return nil, fmt.Errorf("unrecognized event_type %q for sequence %d", eventType, sequence)
 	}

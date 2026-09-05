@@ -43,6 +43,10 @@ func toEventRecord(e apiclient.Event) domain.EventRecord {
 			MessageText: domain.MessageText(stringOrEmpty(e.MessageText)),
 			OccurredAt:  e.OccurredAt,
 		}
+	case "ParticipantAdded":
+		record.Event = domain.ParticipantAdded{ThreadID: domain.ThreadID(stringOrEmpty(e.ThreadId)), ParticipantID: domain.ParticipantID(stringOrEmpty(e.ParticipantId)), OccurredAt: e.OccurredAt}
+	case "ParticipantRemoved":
+		record.Event = domain.ParticipantRemoved{ThreadID: domain.ThreadID(stringOrEmpty(e.ThreadId)), ParticipantID: domain.ParticipantID(stringOrEmpty(e.ParticipantId)), OccurredAt: e.OccurredAt}
 	}
 
 	return record

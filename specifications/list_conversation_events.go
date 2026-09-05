@@ -27,12 +27,14 @@ type EventListDriver interface {
 // populated in a want value, mirroring rule 5's "only the fields relevant
 // to that event's type populated".
 type wantEvent struct {
-	Type        string
-	ResourceURL string
-	ThreadTitle string
-	Author      string
-	Recipients  []string
-	MessageText string
+	Type          string
+	ResourceURL   string
+	ThreadID      string
+	ThreadTitle   string
+	Author        string
+	Recipients    []string
+	MessageText   string
+	ParticipantID string
 }
 
 // ListConversationEventsSpecification covers every rule of "list a
@@ -160,6 +162,12 @@ func assertEvent(t *testing.T, record domain.EventRecord, want wantEvent) {
 	case domain.MessagePosted:
 		got.Author = string(e.Author)
 		got.MessageText = string(e.MessageText)
+	case domain.ParticipantAdded:
+		got.ThreadID = string(e.ThreadID)
+		got.ParticipantID = string(e.ParticipantID)
+	case domain.ParticipantRemoved:
+		got.ThreadID = string(e.ThreadID)
+		got.ParticipantID = string(e.ParticipantID)
 	}
 
 	assert.Equal(t, got, want, "ListConversationEvents record")

@@ -32,11 +32,12 @@ func conversationHandler(t *testing.T) *httpapi.ConversationHandler {
 		Events:     events,
 		Projection: projection,
 	})
+	participants := in.NewManageThreadParticipantUseCase(in.ManageThreadParticipantDependencies{Clock: memory.NewClock(), Events: events})
 	getter := in.NewGetConversationUseCase(projection)
 	lister := in.NewListConversationEventsUseCase(events)
 	byParticipant := in.NewGetConversationsByParticipantUseCase(projection)
 
-	return httpapi.NewConversationHandler(starter, adder, replier, getter, lister, byParticipant)
+	return httpapi.NewConversationHandler(starter, adder, replier, participants, getter, lister, byParticipant)
 }
 
 func strPtr(s string) *string { return &s }
@@ -107,6 +108,32 @@ func TestConversationHandler_ReplyToThread_MissingAuthorIsRejected(t *testing.T)
 
 	_, ok := got.(httpapi.ReplyToThread400JSONResponse)
 	assert.True(t, ok, "ReplyToThread with no author = %#v, want a ReplyToThread400JSONResponse", got)
+}
+
+func TestConversationHandler_AddThreadParticipant_MissingParticipantIDIsRejected(t *testing.T) {
+	handler := conversationHandler(t)
+
+	got, err := handler.AddThreadParticipant(context.Background(), httpapi.AddThreadParticipantRequestObject{
+		ConversationId: "conversation-1",
+		ThreadId:       "thread-1",
+	})
+	assert.NoErr(t, err, "AddThreadParticipant")
+
+	_, ok := got.(httpapi.AddThreadParticipant400JSONResponse)
+	assert.True(t, ok, "AddThreadParticipant with no participantId = %#v, want an AddThreadParticipant400JSONResponse", got)
+}
+
+func TestConversationHandler_RemoveThreadParticipant_MissingParticipantIDIsRejected(t *testing.T) {
+	handler := conversationHandler(t)
+
+	got, err := handler.RemoveThreadParticipant(context.Background(), httpapi.RemoveThreadParticipantRequestObject{
+		ConversationId: "conversation-1",
+		ThreadId:       "thread-1",
+	})
+	assert.NoErr(t, err, "RemoveThreadParticipant")
+
+	_, ok := got.(httpapi.RemoveThreadParticipant400JSONResponse)
+	assert.True(t, ok, "RemoveThreadParticipant with no participantId = %#v, want a RemoveThreadParticipant400JSONResponse", got)
 }
 
 func TestConversationHandler_ReplyToThread_UnknownConversationIs404(t *testing.T) {

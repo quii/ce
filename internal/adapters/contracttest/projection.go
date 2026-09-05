@@ -131,5 +131,29 @@ func Projection(t *testing.T, newProjection func() out.Projection) {
 		assert.Equal(t, checkpoint, domain.Sequence(4), "Checkpoint() after applying the batch plus one more event")
 	})
 
+	t.Run("applying participant membership events changes only the targeted thread", func(t *testing.T) {
+		projection := newProjection()
+		ctx := context.Background()
+		created := sampleConversationCreated("conversation-participants")
+		thread := sampleThreadStarted("conversation-participants", "thread-participants")
+		opening := sampleMessagePosted("conversation-participants", "thread-participants", "message-participants")
+
+		assert.NoErr(t, projection.Apply(ctx,
+			out.OutboxEntry{Sequence: 1, Event: created},
+			out.OutboxEntry{Sequence: 2, Event: thread},
+			out.OutboxEntry{Sequence: 3, Event: opening},
+			out.OutboxEntry{Sequence: 4, Event: domain.ParticipantAdded{ConversationID: created.ConversationID, ThreadID: thread.ThreadID, ParticipantID: "user-4"}},
+		), "Apply(ParticipantAdded)")
+
+		view, err := projection.Get(ctx, created.ConversationID)
+		assert.NoErr(t, err, "Get after ParticipantAdded")
+		assert.Equal(t, view.Threads[0].Participants, append(thread.Participants(), "user-4"), "Get().Threads[0].Participants after ParticipantAdded")
+
+		assert.NoErr(t, projection.Apply(ctx, out.OutboxEntry{Sequence: 5, Event: domain.ParticipantRemoved{ConversationID: created.ConversationID, ThreadID: thread.ThreadID, ParticipantID: "user-1"}}), "Apply(ParticipantRemoved)")
+		view, err = projection.Get(ctx, created.ConversationID)
+		assert.NoErr(t, err, "Get after ParticipantRemoved")
+		assert.Equal(t, view.Threads[0].Participants, domain.Recipients{"user-2", "user-3", "user-4"}, "Get().Threads[0].Participants after ParticipantRemoved")
+	})
+
 	projectionThreadTests(t, newProjection)
 }

@@ -54,6 +54,9 @@ type Event struct {
 	MessageText *string   `json:"messageText,omitempty"`
 	OccurredAt  time.Time `json:"occurredAt"`
 
+	// ParticipantId Populated for a ParticipantAdded or ParticipantRemoved event.
+	ParticipantId *string `json:"participantId,omitempty"`
+
 	// Recipients Populated for a ThreadStarted event.
 	Recipients *[]string `json:"recipients,omitempty"`
 
@@ -227,6 +230,12 @@ type ClientInterface interface {
 
 	ReplyToThread(ctx context.Context, conversationId string, threadId string, body ReplyToThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// RemoveThreadParticipant request
+	RemoveThreadParticipant(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddThreadParticipant request
+	AddThreadParticipant(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetConversation request
 	GetConversation(ctx context.Context, id string, params *GetConversationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -320,6 +329,30 @@ func (c *Client) ReplyToThreadWithBody(ctx context.Context, conversationId strin
 
 func (c *Client) ReplyToThread(ctx context.Context, conversationId string, threadId string, body ReplyToThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplyToThreadRequest(c.Server, conversationId, threadId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RemoveThreadParticipant(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveThreadParticipantRequest(c.Server, conversationId, threadId, participantId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) AddThreadParticipant(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddThreadParticipantRequest(c.Server, conversationId, threadId, participantId)
 	if err != nil {
 		return nil, err
 	}
@@ -579,6 +612,102 @@ func NewReplyToThreadRequestWithBody(server string, conversationId string, threa
 	return req, nil
 }
 
+// NewRemoveThreadParticipantRequest generates requests for RemoveThreadParticipant
+func NewRemoveThreadParticipantRequest(server string, conversationId string, threadId string, participantId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "threadId", threadId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "participantId", participantId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/conversations/%s/threads/%s/participants/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAddThreadParticipantRequest generates requests for AddThreadParticipant
+func NewAddThreadParticipantRequest(server string, conversationId string, threadId string, participantId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "conversationId", conversationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "threadId", threadId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "participantId", participantId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/conversations/%s/threads/%s/participants/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetConversationRequest generates requests for GetConversation
 func NewGetConversationRequest(server string, id string, params *GetConversationParams) (*http.Request, error) {
 	var err error
@@ -758,6 +887,12 @@ type ClientWithResponsesInterface interface {
 
 	ReplyToThreadWithResponse(ctx context.Context, conversationId string, threadId string, body ReplyToThreadJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplyToThreadResponse, error)
 
+	// RemoveThreadParticipantWithResponse request
+	RemoveThreadParticipantWithResponse(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*RemoveThreadParticipantResponse, error)
+
+	// AddThreadParticipantWithResponse request
+	AddThreadParticipantWithResponse(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*AddThreadParticipantResponse, error)
+
 	// GetConversationWithResponse request
 	GetConversationWithResponse(ctx context.Context, id string, params *GetConversationParams, reqEditors ...RequestEditorFn) (*GetConversationResponse, error)
 
@@ -919,6 +1054,68 @@ func (r ReplyToThreadResponse) ContentType() string {
 	return ""
 }
 
+type RemoveThreadParticipantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveThreadParticipantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveThreadParticipantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveThreadParticipantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AddThreadParticipantResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *Error
+	JSON404      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r AddThreadParticipantResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddThreadParticipantResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AddThreadParticipantResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetConversationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1047,6 +1244,24 @@ func (c *ClientWithResponses) ReplyToThreadWithResponse(ctx context.Context, con
 		return nil, err
 	}
 	return ParseReplyToThreadResponse(rsp)
+}
+
+// RemoveThreadParticipantWithResponse request returning *RemoveThreadParticipantResponse
+func (c *ClientWithResponses) RemoveThreadParticipantWithResponse(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*RemoveThreadParticipantResponse, error) {
+	rsp, err := c.RemoveThreadParticipant(ctx, conversationId, threadId, participantId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveThreadParticipantResponse(rsp)
+}
+
+// AddThreadParticipantWithResponse request returning *AddThreadParticipantResponse
+func (c *ClientWithResponses) AddThreadParticipantWithResponse(ctx context.Context, conversationId string, threadId string, participantId string, reqEditors ...RequestEditorFn) (*AddThreadParticipantResponse, error) {
+	rsp, err := c.AddThreadParticipant(ctx, conversationId, threadId, participantId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddThreadParticipantResponse(rsp)
 }
 
 // GetConversationWithResponse request returning *GetConversationResponse
@@ -1212,6 +1427,72 @@ func ParseReplyToThreadResponse(rsp *http.Response) (*ReplyToThreadResponse, err
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveThreadParticipantResponse parses an HTTP response from a RemoveThreadParticipantWithResponse call
+func ParseRemoveThreadParticipantResponse(rsp *http.Response) (*RemoveThreadParticipantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveThreadParticipantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddThreadParticipantResponse parses an HTTP response from a AddThreadParticipantWithResponse call
+func ParseAddThreadParticipantResponse(rsp *http.Response) (*AddThreadParticipantResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddThreadParticipantResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Error

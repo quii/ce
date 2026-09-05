@@ -23,13 +23,14 @@ func NewValidationError(msg string) ValidationError {
 }
 
 var (
-	ErrResourceURLRequired = ValidationError{msg: "resourceUrl is required"}
-	ErrThreadTitleRequired = ValidationError{msg: "threadTitle is required"}
-	ErrAuthorRequired      = ValidationError{msg: "author is required"}
-	ErrMessageRequired     = ValidationError{msg: "message is required"}
-	ErrRecipientsRequired  = ValidationError{msg: "recipients is required"}
-	ErrDuplicateRecipient  = ValidationError{msg: "recipients must not contain a duplicate id"}
-	ErrAuthorIsRecipient   = ValidationError{msg: "author must not also appear in recipients"}
+	ErrResourceURLRequired   = ValidationError{msg: "resourceUrl is required"}
+	ErrThreadTitleRequired   = ValidationError{msg: "threadTitle is required"}
+	ErrAuthorRequired        = ValidationError{msg: "author is required"}
+	ErrMessageRequired       = ValidationError{msg: "message is required"}
+	ErrRecipientsRequired    = ValidationError{msg: "recipients is required"}
+	ErrDuplicateRecipient    = ValidationError{msg: "recipients must not contain a duplicate id"}
+	ErrAuthorIsRecipient     = ValidationError{msg: "author must not also appear in recipients"}
+	ErrParticipantIDRequired = ValidationError{msg: "participantId is required"}
 )
 
 // ErrConversationNotFound and ErrProjectionNotCaughtUp are the two ways a

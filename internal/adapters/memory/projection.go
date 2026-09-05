@@ -56,6 +56,14 @@ func (p *Projection) Apply(_ context.Context, entries ...out.OutboxEntry) error 
 			if err := p.applyMessagePosted(e); err != nil {
 				return err
 			}
+		case domain.ParticipantAdded:
+			if err := p.applyParticipantAdded(e); err != nil {
+				return err
+			}
+		case domain.ParticipantRemoved:
+			if err := p.applyParticipantRemoved(e); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("cannot apply event of unrecognized type %T", entry.Event)
 		}
@@ -161,8 +169,8 @@ func (p *Projection) GetByParticipant(_ context.Context, id domain.ParticipantID
 	defer p.mu.Unlock()
 
 	type entry struct {
-		view      domain.ConversationView
-		latestAt  time.Time
+		view     domain.ConversationView
+		latestAt time.Time
 	}
 
 	var entries []entry

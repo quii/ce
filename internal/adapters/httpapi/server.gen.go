@@ -54,6 +54,9 @@ type Event struct {
 	MessageText *string   `json:"messageText,omitempty"`
 	OccurredAt  time.Time `json:"occurredAt"`
 
+	// ParticipantId Populated for a ParticipantAdded or ParticipantRemoved event.
+	ParticipantId *string `json:"participantId,omitempty"`
+
 	// Recipients Populated for a ThreadStarted event.
 	Recipients *[]string `json:"recipients,omitempty"`
 
@@ -150,6 +153,12 @@ type ServerInterface interface {
 	// Reply to an existing thread
 	// (POST /conversations/{conversationId}/threads/{threadId}/messages)
 	ReplyToThread(w http.ResponseWriter, r *http.Request, conversationId string, threadId string)
+	// Remove a participant from a thread
+	// (DELETE /conversations/{conversationId}/threads/{threadId}/participants/{participantId})
+	RemoveThreadParticipant(w http.ResponseWriter, r *http.Request, conversationId string, threadId string, participantId string)
+	// Add a participant to a thread
+	// (PUT /conversations/{conversationId}/threads/{threadId}/participants/{participantId})
+	AddThreadParticipant(w http.ResponseWriter, r *http.Request, conversationId string, threadId string, participantId string)
 	// Get a conversation, optionally waiting for a specific write to be reflected
 	// (GET /conversations/{id})
 	GetConversation(w http.ResponseWriter, r *http.Request, id string, params GetConversationParams)
@@ -292,6 +301,94 @@ func (siw *ServerInterfaceWrapper) ReplyToThread(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplyToThread(w, r, conversationId, threadId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveThreadParticipant operation middleware
+func (siw *ServerInterfaceWrapper) RemoveThreadParticipant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "threadId" -------------
+	var threadId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "threadId", r.PathValue("threadId"), &threadId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "threadId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "participantId" -------------
+	var participantId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "participantId", r.PathValue("participantId"), &participantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "participantId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveThreadParticipant(w, r, conversationId, threadId, participantId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddThreadParticipant operation middleware
+func (siw *ServerInterfaceWrapper) AddThreadParticipant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "conversationId" -------------
+	var conversationId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "conversationId", r.PathValue("conversationId"), &conversationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "conversationId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "threadId" -------------
+	var threadId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "threadId", r.PathValue("threadId"), &threadId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "threadId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "participantId" -------------
+	var participantId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "participantId", r.PathValue("participantId"), &participantId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "participantId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddThreadParticipant(w, r, conversationId, threadId, participantId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -501,6 +598,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations/{conversationId}/events", wrapper.ListConversationEvents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations/{conversationId}/threads", wrapper.AddThread)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/conversations/{conversationId}/threads/{threadId}/messages", wrapper.ReplyToThread)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/conversations/{conversationId}/threads/{threadId}/participants/{participantId}", wrapper.RemoveThreadParticipant)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/conversations/{conversationId}/threads/{threadId}/participants/{participantId}", wrapper.AddThreadParticipant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/conversations/{id}", wrapper.GetConversation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/greeting", wrapper.GetGreeting)
 
@@ -724,6 +823,130 @@ func (response ReplyToThread404JSONResponse) VisitReplyToThreadResponse(w http.R
 	return err
 }
 
+type RemoveThreadParticipantRequestObject struct {
+	ConversationId string `json:"conversationId"`
+	ThreadId       string `json:"threadId"`
+	ParticipantId  string `json:"participantId"`
+}
+
+type RemoveThreadParticipantResponseObject interface {
+	VisitRemoveThreadParticipantResponse(w http.ResponseWriter) error
+}
+
+type RemoveThreadParticipant202ResponseHeaders struct {
+	Location *string
+}
+
+type RemoveThreadParticipant202Response struct {
+	Headers RemoveThreadParticipant202ResponseHeaders
+}
+
+func (response RemoveThreadParticipant202Response) VisitRemoveThreadParticipantResponse(w http.ResponseWriter) error {
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(202)
+	return nil
+}
+
+type RemoveThreadParticipant204Response struct {
+}
+
+func (response RemoveThreadParticipant204Response) VisitRemoveThreadParticipantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveThreadParticipant400JSONResponse Error
+
+func (response RemoveThreadParticipant400JSONResponse) VisitRemoveThreadParticipantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveThreadParticipant404JSONResponse Error
+
+func (response RemoveThreadParticipant404JSONResponse) VisitRemoveThreadParticipantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddThreadParticipantRequestObject struct {
+	ConversationId string `json:"conversationId"`
+	ThreadId       string `json:"threadId"`
+	ParticipantId  string `json:"participantId"`
+}
+
+type AddThreadParticipantResponseObject interface {
+	VisitAddThreadParticipantResponse(w http.ResponseWriter) error
+}
+
+type AddThreadParticipant202ResponseHeaders struct {
+	Location *string
+}
+
+type AddThreadParticipant202Response struct {
+	Headers AddThreadParticipant202ResponseHeaders
+}
+
+func (response AddThreadParticipant202Response) VisitAddThreadParticipantResponse(w http.ResponseWriter) error {
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(202)
+	return nil
+}
+
+type AddThreadParticipant204Response struct {
+}
+
+func (response AddThreadParticipant204Response) VisitAddThreadParticipantResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AddThreadParticipant400JSONResponse Error
+
+func (response AddThreadParticipant400JSONResponse) VisitAddThreadParticipantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddThreadParticipant404JSONResponse Error
+
+func (response AddThreadParticipant404JSONResponse) VisitAddThreadParticipantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetConversationRequestObject struct {
 	Id     string `json:"id"`
 	Params GetConversationParams
@@ -808,6 +1031,12 @@ type StrictServerInterface interface {
 	// Reply to an existing thread
 	// (POST /conversations/{conversationId}/threads/{threadId}/messages)
 	ReplyToThread(ctx context.Context, request ReplyToThreadRequestObject) (ReplyToThreadResponseObject, error)
+	// Remove a participant from a thread
+	// (DELETE /conversations/{conversationId}/threads/{threadId}/participants/{participantId})
+	RemoveThreadParticipant(ctx context.Context, request RemoveThreadParticipantRequestObject) (RemoveThreadParticipantResponseObject, error)
+	// Add a participant to a thread
+	// (PUT /conversations/{conversationId}/threads/{threadId}/participants/{participantId})
+	AddThreadParticipant(ctx context.Context, request AddThreadParticipantRequestObject) (AddThreadParticipantResponseObject, error)
 	// Get a conversation, optionally waiting for a specific write to be reflected
 	// (GET /conversations/{id})
 	GetConversation(ctx context.Context, request GetConversationRequestObject) (GetConversationResponseObject, error)
@@ -988,6 +1217,62 @@ func (sh *strictHandler) ReplyToThread(w http.ResponseWriter, r *http.Request, c
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplyToThreadResponseObject); ok {
 		if err := validResponse.VisitReplyToThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveThreadParticipant operation middleware
+func (sh *strictHandler) RemoveThreadParticipant(w http.ResponseWriter, r *http.Request, conversationId string, threadId string, participantId string) {
+	var request RemoveThreadParticipantRequestObject
+
+	request.ConversationId = conversationId
+	request.ThreadId = threadId
+	request.ParticipantId = participantId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveThreadParticipant(ctx, request.(RemoveThreadParticipantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveThreadParticipant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveThreadParticipantResponseObject); ok {
+		if err := validResponse.VisitRemoveThreadParticipantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddThreadParticipant operation middleware
+func (sh *strictHandler) AddThreadParticipant(w http.ResponseWriter, r *http.Request, conversationId string, threadId string, participantId string) {
+	var request AddThreadParticipantRequestObject
+
+	request.ConversationId = conversationId
+	request.ThreadId = threadId
+	request.ParticipantId = participantId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddThreadParticipant(ctx, request.(AddThreadParticipantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddThreadParticipant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddThreadParticipantResponseObject); ok {
+		if err := validResponse.VisitAddThreadParticipantResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

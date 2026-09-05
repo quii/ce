@@ -113,18 +113,3 @@ func assertThreadMessages(t *testing.T, thread domain.ThreadView, want []wantMes
 		assert.False(t, m.PostedAt.IsZero(), "Thread.Messages[%d].PostedAt is zero, want a real timestamp", i)
 	}
 }
-
-// assertThreadParticipants checks membership rather than positional
-// equality - ThreadView.Participants has no guaranteed order (rule 4 of
-// "thread participants") - against a specific thread, the one place any
-// specification's participants assertion is implemented (assertParticipants
-// delegates here for the conversation's first thread; AddThreadSpecification
-// calls it directly for a thread further down the list).
-func assertThreadParticipants(t *testing.T, thread domain.ThreadView, want []string) {
-	t.Helper()
-
-	assert.Len(t, thread.Participants, len(want), "Thread.Participants")
-	for _, id := range want {
-		assert.Contains(t, thread.Participants, domain.ParticipantID(id), "Thread.Participants")
-	}
-}

@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addConversationProjectionThreadParticipant = `-- name: AddConversationProjectionThreadParticipant :exec
+UPDATE conversation_projection_threads
+SET participants = array_append(participants, $3::text)
+WHERE conversation_id = $1 AND id = $2
+`
+
+type AddConversationProjectionThreadParticipantParams struct {
+	ConversationID string
+	ID             string
+	Participant    string
+}
+
+func (q *Queries) AddConversationProjectionThreadParticipant(ctx context.Context, arg AddConversationProjectionThreadParticipantParams) error {
+	_, err := q.db.Exec(ctx, addConversationProjectionThreadParticipant, arg.ConversationID, arg.ID, arg.Participant)
+	return err
+}
+
 const appendConversationProjectionMessage = `-- name: AppendConversationProjectionMessage :exec
 INSERT INTO conversation_projection_messages (
     conversation_id, thread_id, sequence, author, message_text, posted_at
@@ -341,6 +358,23 @@ func (q *Queries) ListParticipantThreadsForConversation(ctx context.Context, arg
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeConversationProjectionThreadParticipant = `-- name: RemoveConversationProjectionThreadParticipant :exec
+UPDATE conversation_projection_threads
+SET participants = array_remove(participants, $3::text)
+WHERE conversation_id = $1 AND id = $2
+`
+
+type RemoveConversationProjectionThreadParticipantParams struct {
+	ConversationID string
+	ID             string
+	Participant    string
+}
+
+func (q *Queries) RemoveConversationProjectionThreadParticipant(ctx context.Context, arg RemoveConversationProjectionThreadParticipantParams) error {
+	_, err := q.db.Exec(ctx, removeConversationProjectionThreadParticipant, arg.ConversationID, arg.ID, arg.Participant)
+	return err
 }
 
 const setProjectionCheckpoint = `-- name: SetProjectionCheckpoint :exec

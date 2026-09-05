@@ -31,12 +31,15 @@ func main() {
 
 	handler := httpapi.NewCompositeHandler(
 		httpapi.NewGreetingHandler(app.GetGreeting),
-		httpapi.NewConversationHandler(app.StartConversation, app.AddThread, app.ReplyToThread, app.GetConversation, app.ListConversationEvents, app.GetConversationsByParticipant),
+		httpapi.NewConversationHandler(app.StartConversation, app.AddThread, app.ReplyToThread, app.ManageThreadParticipants, app.GetConversation, app.ListConversationEvents, app.GetConversationsByParticipant),
 	)
 	strictHandler := httpapi.NewStrictHandler(handler, nil)
 
+	apiMux := http.NewServeMux()
+	httpapi.HandlerFromMux(strictHandler, apiMux)
+
 	mux := http.NewServeMux()
-	httpapi.HandlerFromMux(strictHandler, mux)
+	mux.Handle("/", apiMux)
 	mux.Handle("GET /openapi.yaml", docs.SpecHandler(api.OpenAPISpec))
 	mux.Handle("GET /docs", docs.Handler())
 

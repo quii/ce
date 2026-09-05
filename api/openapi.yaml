@@ -207,6 +207,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /conversations/{conversationId}/threads/{threadId}/participants/{participantId}:
+    put:
+      operationId: addThreadParticipant
+      summary: Add a participant to a thread
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted - the membership change is durable but not necessarily reflected in the read model yet
+          headers:
+            Location:
+              description: The conversation, with an after cursor for polling until the projection has caught up
+              schema:
+                type: string
+        '204':
+          description: The participant was already a member
+        '400':
+          description: The participant id is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: The conversation doesn't exist, or the thread doesn't exist under it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: removeThreadParticipant
+      summary: Remove a participant from a thread
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted - the membership change is durable but not necessarily reflected in the read model yet
+          headers:
+            Location:
+              description: The conversation, with an after cursor for polling until the projection has caught up
+              schema:
+                type: string
+        '204':
+          description: The participant was already absent
+        '400':
+          description: The participant id is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: The conversation doesn't exist, or the thread doesn't exist under it
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
     Greeting:
@@ -370,6 +453,9 @@ components:
         messageText:
           type: string
           description: Populated for a MessagePosted event.
+        participantId:
+          type: string
+          description: Populated for a ParticipantAdded or ParticipantRemoved event.
     ReplyToThreadRequest:
       type: object
       description: >-

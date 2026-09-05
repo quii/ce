@@ -18,6 +18,16 @@ INSERT INTO conversation_projection_threads (
     $1, $2, $3, $4, $5
 );
 
+-- name: AddConversationProjectionThreadParticipant :exec
+UPDATE conversation_projection_threads
+SET participants = array_append(participants, sqlc.arg(participant)::text)
+WHERE conversation_id = $1 AND id = $2;
+
+-- name: RemoveConversationProjectionThreadParticipant :exec
+UPDATE conversation_projection_threads
+SET participants = array_remove(participants, sqlc.arg(participant)::text)
+WHERE conversation_id = $1 AND id = $2;
+
 -- name: AppendConversationProjectionMessage :exec
 INSERT INTO conversation_projection_messages (
     conversation_id, thread_id, sequence, author, message_text, posted_at

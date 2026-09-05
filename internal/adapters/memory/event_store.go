@@ -70,6 +70,10 @@ func conversationIDOf(event domain.Event) domain.ConversationID {
 		return e.ConversationID
 	case domain.MessagePosted:
 		return e.ConversationID
+	case domain.ParticipantAdded:
+		return e.ConversationID
+	case domain.ParticipantRemoved:
+		return e.ConversationID
 	default:
 		return ""
 	}

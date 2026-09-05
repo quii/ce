@@ -41,6 +41,14 @@ func (s *Store) Apply(ctx context.Context, entries ...out.OutboxEntry) error {
 			if err := applyMessagePosted(ctx, q, e, entry.Sequence); err != nil {
 				return err
 			}
+		case domain.ParticipantAdded:
+			if err := applyParticipantAdded(ctx, q, e); err != nil {
+				return err
+			}
+		case domain.ParticipantRemoved:
+			if err := applyParticipantRemoved(ctx, q, e); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("cannot apply event of unrecognized type %T", entry.Event)
 		}
@@ -56,6 +64,20 @@ func (s *Store) Apply(ctx context.Context, entries ...out.OutboxEntry) error {
 		return fmt.Errorf("could not commit projection transaction: %w", err)
 	}
 
+	return nil
+}
+
+func applyParticipantAdded(ctx context.Context, q *Queries, event domain.ParticipantAdded) error {
+	if err := q.AddConversationProjectionThreadParticipant(ctx, AddConversationProjectionThreadParticipantParams{ConversationID: string(event.ConversationID), ID: string(event.ThreadID), Participant: string(event.ParticipantID)}); err != nil {
+		return fmt.Errorf("could not add thread participant to projection")
+	}
+	return nil
+}
+
+func applyParticipantRemoved(ctx context.Context, q *Queries, event domain.ParticipantRemoved) error {
+	if err := q.RemoveConversationProjectionThreadParticipant(ctx, RemoveConversationProjectionThreadParticipantParams{ConversationID: string(event.ConversationID), ID: string(event.ThreadID), Participant: string(event.ParticipantID)}); err != nil {
+		return fmt.Errorf("could not remove thread participant from projection")
+	}
 	return nil
 }
 

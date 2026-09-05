@@ -147,6 +147,22 @@ func (d *Driver) ReplyToThread(ctx context.Context, cmd in.ReplyToThreadCommand)
 	return in.ReplyToThreadResult{ConversationID: id, Sequence: seq}, nil
 }
 
+func (d *Driver) AddThreadParticipant(ctx context.Context, cmd in.ManageThreadParticipantCommand) (in.ManageThreadParticipantResult, error) {
+	resp, err := d.client.AddThreadParticipantWithResponse(ctx, cmd.ConversationID, cmd.ThreadID, cmd.ParticipantID)
+	if err != nil {
+		return in.ManageThreadParticipantResult{}, err
+	}
+	return d.manageThreadParticipantResponse(resp.StatusCode(), resp.HTTPResponse.Header.Get("Location"))
+}
+
+func (d *Driver) RemoveThreadParticipant(ctx context.Context, cmd in.ManageThreadParticipantCommand) (in.ManageThreadParticipantResult, error) {
+	resp, err := d.client.RemoveThreadParticipantWithResponse(ctx, cmd.ConversationID, cmd.ThreadID, cmd.ParticipantID)
+	if err != nil {
+		return in.ManageThreadParticipantResult{}, err
+	}
+	return d.manageThreadParticipantResponse(resp.StatusCode(), resp.HTTPResponse.Header.Get("Location"))
+}
+
 func (d *Driver) ListConversationEvents(ctx context.Context, cmd in.ListConversationEventsCommand) ([]domain.EventRecord, error) {
 	resp, err := d.client.ListConversationEventsWithResponse(ctx, cmd.ConversationID)
 	if err != nil {
@@ -214,4 +230,3 @@ func (d *Driver) GetConversation(ctx context.Context, cmd in.GetConversationComm
 		return domain.ConversationView{}, fmt.Errorf("unexpected status code %d", resp.StatusCode())
 	}
 }
-

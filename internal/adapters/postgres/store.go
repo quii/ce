@@ -15,6 +15,8 @@ const (
 	eventTypeConversationCreated = "ConversationCreated"
 	eventTypeThreadStarted       = "ThreadStarted"
 	eventTypeMessagePosted       = "MessagePosted"
+	eventTypeParticipantAdded    = "ParticipantAdded"
+	eventTypeParticipantRemoved  = "ParticipantRemoved"
 )
 
 // Store is the Postgres-backed out.EventStore, out.Outbox and
@@ -74,6 +76,11 @@ type messagePostedPayload struct {
 	MessageID   string `json:"message_id"`
 	Author      string `json:"author"`
 	MessageText string `json:"message_text"`
+}
+
+type participantPayload struct {
+	ThreadID      string `json:"thread_id"`
+	ParticipantID string `json:"participant_id"`
 }
 
 // eventRow is the shared-columns-plus-payload shape both
@@ -137,6 +144,18 @@ func marshalEvent(event domain.Event) (eventRow, error) {
 			OccurredAt:     e.OccurredAt,
 			Payload:        payload,
 		}, nil
+	case domain.ParticipantAdded:
+		payload, err := json.Marshal(participantPayload{ThreadID: string(e.ThreadID), ParticipantID: string(e.ParticipantID)})
+		if err != nil {
+			return eventRow{}, fmt.Errorf("could not marshal ParticipantAdded payload: %w", err)
+		}
+		return eventRow{EventType: eventTypeParticipantAdded, ConversationID: e.ConversationID, OccurredAt: e.OccurredAt, Payload: payload}, nil
+	case domain.ParticipantRemoved:
+		payload, err := json.Marshal(participantPayload{ThreadID: string(e.ThreadID), ParticipantID: string(e.ParticipantID)})
+		if err != nil {
+			return eventRow{}, fmt.Errorf("could not marshal ParticipantRemoved payload: %w", err)
+		}
+		return eventRow{EventType: eventTypeParticipantRemoved, ConversationID: e.ConversationID, OccurredAt: e.OccurredAt, Payload: payload}, nil
 	default:
 		return eventRow{}, fmt.Errorf("cannot marshal event of unrecognized type %T", event)
 	}
